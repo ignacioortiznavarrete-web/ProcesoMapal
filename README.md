@@ -8,9 +8,9 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 
 ## Qué hace
 
-- Trae la planilla manual de ingresos (`RECEPCION DIARIA MADERAS`, archivo
-  externo de sólo lectura, con una hoja por mes y encabezados irregulares) y la
-  consolida en la hoja `Planilla Exportada`.
+- Trae la hoja del **mes en curso** de la planilla manual de ingresos
+  (`RECEPCION DIARIA MADERAS`, archivo externo de sólo lectura, con una hoja
+  por mes y encabezados irregulares) a la hoja `Planilla Exportada`.
 - Cruza cada camión por Nº de guía contra `Ingresos Sap`.
 - Los camiones que todavía no están en SAP se valorizan con el promedio
   TS/camión del proveedor (hoja `Promedios SAP`).
@@ -33,7 +33,7 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
    ```
 
 3. `Config.gs` ya viene apuntando a `RECEPCION DIARIA MADERAS`
-   (`ORIGEN_ID`); revisar `MESES_ATRAS_IMPORTAR` y `PRODUCTOS_INCLUIDOS`.
+   (`ORIGEN_ID`) y a la hoja del mes en curso; revisar `PRODUCTOS_INCLUIDOS`.
    La cuenta que autorice el script tiene que tener acceso de lectura a esa
    planilla.
 4. Recargar la planilla: aparece el menú **Control Ingreso**.
@@ -51,8 +51,8 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 | Parámetro | Para qué |
 |---|---|
 | `ORIGEN_ID` | planilla manual de ingresos |
-| `ORIGEN_HOJA` | vacío = todas las hojas mensuales; con nombre = sólo esa |
-| `MESES_ATRAS_IMPORTAR` | meses de la planilla manual a traer (0 = todos) |
+| `ORIGEN_HOJA` | vacío = la hoja del mes en curso; con nombre = sólo esa |
+| `MESES_A_IMPORTAR` | hojas mensuales a traer desde el mes actual (1 = sólo el mes en curso, 0 = todas) |
 | `PRODUCTOS_INCLUIDOS` | productos a controlar (`['ASTILLA VERDE']`) |
 | `ESTADOS_EXCLUIDOS` | estados de la planilla que se descartan (ANULADO...) |
 | `PROMEDIO_VENTANA_DIAS` | días del promedio TS/camión (0 = todo el histórico) |

@@ -23,8 +23,9 @@ contar dos veces el mismo camión.
 ### Rarezas de la planilla origen (resueltas en el importador)
 
 - **Una hoja por mes**, con nombres irregulares: `Junio 2024`, `Sept 2024`,
-  ` Nov 2024`, `MAY0 2025` (con typo), `SEPTIEMBRE 2026`. Se detectan por
-  nombre y se importan las de los últimos `MESES_ATRAS_IMPORTAR` meses.
+  ` Nov 2024`, `MAY0 2025` (con typo), `SEPTIEMBRE 2026`. Se busca sola la
+  hoja del **mes en curso**; si todavía no existe se trae la más reciente y se
+  avisa. Con `MESES_A_IMPORTAR` se pueden sumar meses anteriores (0 = todos).
   `Hoja 4` y cualquier hoja que no sea un mes se ignoran.
 - **Layouts distintos**: hasta abril 2025 la columna A es la fecha; desde mayo
   2025 la A es el correlativo `N°` y la fecha pasa a la B.
@@ -45,9 +46,10 @@ contar dos veces el mismo camión.
 
 ## Cómo se calcula
 
-1. **Importar**: se abren las hojas mensuales de la planilla origen (sólo
-   lectura, nunca se le escribe) y se consolidan en `Planilla Exportada` con un
-   formato único, guardando `Hoja origen` y `Fila origen` de cada camión.
+1. **Importar**: se abre la hoja del mes en curso de la planilla origen (sólo
+   lectura, nunca se le escribe) y se copia a `Planilla Exportada` en un
+   formato único y en orden cronológico, guardando `Hoja origen` y
+   `Fila origen` de cada camión.
 2. **Cruce por guía**: para cada camión se busca `proveedor SAP + Nº de guía` en
    `Ingresos Sap` (sin ceros a la izquierda, sin puntos ni espacios). El
    proveedor es parte de la llave porque los números de guía se repiten entre
@@ -99,6 +101,9 @@ SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
   27-01-2026 a 27-02-2026. Mientras no se actualice, los camiones de meses
   posteriores van a aparecer todos como PENDIENTE (estimados). El control sirve
   igual, pero el cruce real depende de refrescar ese export.
+- Como por defecto se trae **sólo el mes en curso**, si se quiere mirar el
+  control de un mes anterior hay que subir `MESES_A_IMPORTAR` (o poner ese mes
+  en `CONFIG.ORIGEN_HOJA`) y volver a importar.
 - El plan está en **TS**, igual que `Cantidad` de SAP.
 - `PESO BRUTO` es peso de romana con camión incluido: se informa como
   referencia y **no** se usa para estimar.

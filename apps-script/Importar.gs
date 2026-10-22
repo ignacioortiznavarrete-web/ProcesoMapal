@@ -1,6 +1,7 @@
 /**
- * Trae la planilla manual de ingresos ('RECEPCION DIARIA MADERAS', archivo
- * externo de sólo lectura) hacia la hoja 'Planilla Exportada'.
+ * Trae la hoja del mes en curso de la planilla manual de ingresos
+ * ('RECEPCION DIARIA MADERAS', archivo externo de sólo lectura) hacia la hoja
+ * 'Planilla Exportada'.
  *
  * Esa planilla tiene una hoja por mes y los encabezados cambian de hoja en
  * hoja (la columna A a veces es FECHA y a veces el correlativo N°, con títulos
@@ -24,7 +25,8 @@ function importarPlanillaOrigen() {
   }
 
   const origen = SpreadsheetApp.openById(CONFIG.ORIGEN_ID);
-  const hojas = hojasAImportar(origen);
+  const seleccion = hojasAImportar(origen);
+  const hojas = seleccion.hojas;
   if (!hojas.length) {
     throw new Error('No se encontraron hojas mensuales en "' + origen.getName() + '".');
   }
@@ -38,11 +40,11 @@ function importarPlanillaOrigen() {
     detalleHojas.push({ hoja: info.hoja.getName(), mes: info.mes, filas: leidas.length });
   });
 
-  // Más reciente primero dentro de la hoja consolidada.
+  // Mismo orden cronológico que la planilla origen.
   filas.sort(function (a, b) {
     const fa = a[1] instanceof Date ? a[1].getTime() : 0;
     const fb = b[1] instanceof Date ? b[1].getTime() : 0;
-    return fb - fa;
+    return fa - fb;
   });
 
   const libro = SpreadsheetApp.getActiveSpreadsheet();
@@ -66,32 +68,58 @@ function importarPlanillaOrigen() {
   return {
     archivo: origen.getName(),
     hojas: detalleHojas,
-    filas: filas.length
+    filas: filas.length,
+    mes: seleccion.mes,
+    aviso: seleccion.aviso
   };
 }
 
-/** Hojas a importar: la configurada, o todas las mensuales dentro de la ventana. */
+/**
+ * Qué hojas traer.
+ *
+ * Normalmente la del mes en curso. Si todavía no existe (a principios de mes,
+ * o porque el mes se abre con otro nombre), se trae la más reciente que haya y
+ * se avisa. CONFIG.MESES_A_IMPORTAR permite sumar meses anteriores.
+ */
 function hojasAImportar(origen) {
   if (CONFIG.ORIGEN_HOJA) {
     const hoja = origen.getSheetByName(CONFIG.ORIGEN_HOJA);
     if (!hoja) {
       throw new Error('No se encontró la hoja "' + CONFIG.ORIGEN_HOJA + '" en la planilla origen.');
     }
-    return [{ hoja: hoja, mes: claveMesDesdeNombreHoja(hoja.getName()) }];
+    return { hojas: [{ hoja: hoja, mes: claveMesDesdeNombreHoja(hoja.getName()) }], mes: '', aviso: '' };
   }
 
-  const mesesAtras = Number(CONFIG.MESES_ATRAS_IMPORTAR) || 0;
-  const limite = mesesAtras > 0 ? mesClaveDesplazada(mesActual(), -mesesAtras) : '';
-
-  return origen.getSheets()
+  const mensuales = origen.getSheets()
     .map(function (hoja) {
       return { hoja: hoja, mes: claveMesDesdeNombreHoja(hoja.getName()) };
     })
-    .filter(function (info) {
-      if (!info.mes) return false;
-      return !limite || info.mes >= limite;
-    })
+    .filter(function (info) { return !!info.mes; })
     .sort(function (a, b) { return a.mes < b.mes ? -1 : 1; });
+
+  if (!mensuales.length) return { hojas: [], mes: '', aviso: '' };
+
+  const cuantos = Number(CONFIG.MESES_A_IMPORTAR) || 0;
+  if (cuantos <= 0) {
+    return { hojas: mensuales, mes: mensuales[mensuales.length - 1].mes, aviso: '' };
+  }
+
+  // Mes objetivo: el actual si existe su hoja; si no, la hoja más reciente.
+  const actual = mesActual();
+  const existeActual = mensuales.some(function (info) { return info.mes === actual; });
+  const ultimo = mensuales[mensuales.length - 1].mes;
+  const objetivo = existeActual ? actual : ultimo;
+  const aviso = existeActual
+    ? ''
+    : 'No existe la hoja de ' + etiquetaMes(actual) + ' en la planilla origen; se trajo ' +
+      etiquetaMes(objetivo) + '.';
+
+  const desde = mesClaveDesplazada(objetivo, -(cuantos - 1));
+  const hojas = mensuales.filter(function (info) {
+    return info.mes >= desde && info.mes <= objetivo;
+  });
+
+  return { hojas: hojas, mes: objetivo, aviso: aviso };
 }
 
 /** Lee una hoja mensual y la devuelve en el formato consolidado. */

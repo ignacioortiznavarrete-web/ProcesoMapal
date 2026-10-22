@@ -37,10 +37,7 @@ function actualizarTodo() {
 function accionImportar() {
   try {
     const resultado = importarPlanillaOrigen();
-    SpreadsheetApp.getUi().alert(
-      'Planilla traída desde "' + resultado.archivo + '" (hoja ' + resultado.hoja + ').\n' +
-      resultado.filas + ' camiones cargados en "' + CONFIG.HOJA_PLANILLA + '".'
-    );
+    SpreadsheetApp.getUi().alert(resumenImportacion(resultado));
   } catch (error) {
     SpreadsheetApp.getUi().alert('No se pudo importar:\n\n' + error.message);
   }
@@ -63,12 +60,22 @@ function accionActualizarTodo() {
   try {
     const resultado = actualizarTodo();
     SpreadsheetApp.getUi().alert(
-      'Listo.\n\n' + resultado.importacion.filas + ' camiones importados.\n' +
+      resumenImportacion(resultado.importacion) + '\n\n' +
       'Control del período ' + etiquetaMes(resultado.control.periodo) + ' recalculado.'
     );
   } catch (error) {
     SpreadsheetApp.getUi().alert('Falló la actualización:\n\n' + error.message);
   }
+}
+
+/** Texto para contarle al usuario qué se trajo. */
+function resumenImportacion(resultado) {
+  const detalle = resultado.hojas.map(function (hoja) {
+    return '  • ' + hoja.hoja + ': ' + hoja.filas + ' camiones';
+  }).join('\n');
+  return 'Planilla "' + resultado.archivo + '" traída a "' + CONFIG.HOJA_PLANILLA + '".\n' +
+    detalle + '\n\nTotal: ' + resultado.filas + ' camiones.' +
+    (resultado.aviso ? '\n\nAtención: ' + resultado.aviso : '');
 }
 
 function accionSincronizarHomologacion() {

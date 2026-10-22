@@ -8,13 +8,13 @@ const CONFIG = {
   // --- Planilla origen (la planilla manual que NO se puede editar) ---------
   // 'RECEPCION DIARIA MADERAS': una hoja por mes ('OCTUBRE 2026', 'Sept 2024'...).
   ORIGEN_ID: '1jtF5B1DUQdx6eCWuFIp7k86suCY8XeBJ6_RoNJ3Bg-A',
-  // Vacío = se importan todas las hojas cuyo nombre sea un mes.
-  // Con un nombre de hoja, se importa sólo esa.
+  // Vacío = se busca sola la hoja del mes. Con un nombre fijo, se importa esa.
   ORIGEN_HOJA: '',
   // Fila de encabezados en la planilla origen.
   ORIGEN_FILA_ENCABEZADO: 1,
-  // Cuántos meses hacia atrás traer (0 = todas las hojas mensuales).
-  MESES_ATRAS_IMPORTAR: 12,
+  // Cuántas hojas mensuales traer, contando desde el mes en curso hacia atrás.
+  // 1 = sólo el mes actual (lo normal). 2 = mes actual + anterior. 0 = todas.
+  MESES_A_IMPORTAR: 1,
 
   // --- Filtros de la planilla manual --------------------------------------
   // Productos a controlar, tal como se escriben en la columna PRODUCTO.

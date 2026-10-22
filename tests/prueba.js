@@ -93,7 +93,9 @@ global.Utilities = {
 const fs = require('fs');
 const archivos = ['Config.gs','Util.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Control.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
-eval(codigo);
+// Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
+// ayudante para poder tocar la configuración desde la prueba.
+eval(codigo + '\nglobal.ajustarConfig = function (clave, valor) { CONFIG[clave] = valor; };');
 
 let fallas = 0;
 function assert(cond, mensaje) {
@@ -127,10 +129,25 @@ assert(similitud('SERVICIOS DE TRANSPORTE VOLCÁN', 'SERVICIOS DE TRANSPORTE VOL
 assert(similitud('VOLCAN', 'SERVICIOS DE TRANSPORTE VOLCÁN SPA') > 0.9, 'VOLCAN -> VOLCÁN SPA');
 
 // --- Importación -----------------------------------------------------------
-console.log('\n--- importación ---');
+// Por defecto (MESES_A_IMPORTAR = 1) se trae sólo la hoja del mes en curso.
+console.log('\n--- importación: sólo el mes en curso ---');
+const soloMes = importarPlanillaOrigen();
+console.log(JSON.stringify(soloMes));
+assert(soloMes.hojas.length === 1, 'una sola hoja importada');
+assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
+assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
+assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
+assert(soloMes.filas === 10, '10 camiones (sin la fila de relleno)');
+const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
+assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
+  'queda en orden cronológico, igual que la planilla origen');
+
+// El resto del flujo se prueba con dos meses, para cubrir la consolidación.
+console.log('\n--- importación: mes en curso + anterior ---');
+ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
-assert(importado.hojas.length === 2, 'sólo las hojas dentro de los 12 meses (sept y oct 2026)');
+assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
 assert(importado.filas === 12, '12 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
@@ -186,5 +203,16 @@ function imprimir(nombre, maxCol) {
     console.log(fila.slice(0, maxCol).map(v => (v instanceof Date ? v.toISOString().slice(0, 10) : v)).join(' | '));
   });
 }
+
+// --- Mes sin hoja en la planilla origen ------------------------------------
+console.log('\n--- la hoja del mes todavía no existe ---');
+ajustarConfig('MESES_A_IMPORTAR', 1);
+const hojaOctubre = origen.hojas.find(h => h.nombre === 'OCTUBRE 2026');
+hojaOctubre.nombre = 'Hoja 9';  // deja de reconocerse como mes
+const sinHoja = importarPlanillaOrigen();
+assert(sinHoja.hojas[0].hoja === 'SEPTIEMBRE 2026', 'se trae la hoja más reciente que exista');
+assert(sinHoja.aviso.indexOf('oct-2026') >= 0, 'avisa que falta la hoja del mes en curso');
+console.log('aviso: ' + sinHoja.aviso);
+hojaOctubre.nombre = 'OCTUBRE 2026';
 
 console.log(fallas ? '\n' + fallas + ' prueba(s) con falla' : '\nTodas las pruebas pasaron');
