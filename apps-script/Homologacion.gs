@@ -93,7 +93,15 @@ function resolverProveedor(nombrePlanilla, homologacion, sap, plan) {
     });
     if (exacto.length === 1) nombreSap = exacto[0];
   }
-  if (!nombreSap) return vacio;
+
+  // Proveedor homologado sólo contra el Plan: todavía no tiene historial en
+  // SAP, pero sus camiones igual se cuentan y se estiman con el promedio general.
+  if (!nombreSap) {
+    if (!nombrePlan) nombrePlan = planExacto(nombrePlanilla, plan);
+    return nombrePlan
+      ? { sap: '', plan: nombrePlan, estado: 'SIN SAP' }
+      : vacio;
+  }
 
   if (!nombrePlan) {
     const registroSap = homologacion.porSap[claveProveedor(nombreSap)];

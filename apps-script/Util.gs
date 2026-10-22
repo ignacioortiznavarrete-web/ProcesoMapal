@@ -143,6 +143,31 @@ function mesActual() {
   return hoy.getFullYear() + '-' + dosDigitos(hoy.getMonth() + 1);
 }
 
+/**
+ * Clave de mes a partir del nombre de una hoja mensual.
+ * 'OCTUBRE 2026' -> '2026-10'; 'Sept 2024' -> '2024-09'; 'MAY0 2025' -> '2025-05'.
+ * Devuelve '' si el nombre no es un mes ('Hoja 4').
+ */
+function claveMesDesdeNombreHoja(nombre) {
+  const txt = normalizar(nombre);
+  const anio = txt.match(/(20\d{2})/);
+  if (!anio) return '';
+  const palabras = txt.replace(/20\d{2}/g, ' ').replace(/[^A-Z ]/g, ' ').trim().split(/\s+/);
+  for (let i = 0; i < palabras.length; i++) {
+    const mes = MESES_ES[palabras[i].substring(0, 3)];
+    if (mes) return anio[1] + '-' + dosDigitos(mes);
+  }
+  return '';
+}
+
+/** Mueve una clave de mes N meses ('2026-10', -12 -> '2025-10'). */
+function mesClaveDesplazada(clave, meses) {
+  const m = String(clave || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m) return clave;
+  const fecha = new Date(Number(m[1]), Number(m[2]) - 1 + Number(meses), 1);
+  return fecha.getFullYear() + '-' + dosDigitos(fecha.getMonth() + 1);
+}
+
 /** Distancia de Levenshtein entre dos textos. */
 function distanciaLevenshtein(a, b) {
   if (a === b) return 0;
@@ -163,19 +188,49 @@ function distanciaLevenshtein(a, b) {
   return fila[b.length];
 }
 
-/** Similitud 0..1 entre dos nombres de proveedor. */
+/** ¿La lista corta aparece completa y seguida dentro de la larga? */
+function secuenciaContenida(cortos, largos) {
+  if (!cortos.length || cortos.length > largos.length) return false;
+  for (let inicio = 0; inicio <= largos.length - cortos.length; inicio++) {
+    let calza = true;
+    for (let i = 0; i < cortos.length; i++) {
+      if (largos[inicio + i] !== cortos[i]) { calza = false; break; }
+    }
+    if (calza) return true;
+  }
+  return false;
+}
+
+/**
+ * Similitud 0..1 entre dos nombres de proveedor.
+ *
+ * La comparación es por palabras completas: la planilla manual usa nombres
+ * cortos ('GUIVAR', 'COLLICURA', 'LEON') y hay que pegarlos a la razón social
+ * de SAP sin confundir 'LEON' con 'LEONERA'.
+ */
 function similitud(a, b) {
   const x = normalizarProveedor(a);
   const y = normalizarProveedor(b);
   if (!x || !y) return 0;
   if (x === y) return 1;
-  if (x.indexOf(y) >= 0 || y.indexOf(x) >= 0) return 0.95;
 
-  const tokensX = x.split(' ').filter(function (t) { return t.length > 2; });
-  const tokensY = y.split(' ').filter(function (t) { return t.length > 2; });
+  const tokensX = x.split(' ');
+  const tokensY = y.split(' ');
+  if (secuenciaContenida(tokensX, tokensY) || secuenciaContenida(tokensY, tokensX)) return 0.95;
+
+  const significativosX = tokensX.filter(function (t) { return t.length >= 3; });
+  const significativosY = tokensY.filter(function (t) { return t.length >= 3; });
+  const contenidoEnY = significativosX.length && significativosX.every(function (t) {
+    return significativosY.indexOf(t) >= 0;
+  });
+  const contenidoEnX = significativosY.length && significativosY.every(function (t) {
+    return significativosX.indexOf(t) >= 0;
+  });
+  if (contenidoEnY || contenidoEnX) return 0.9;
+
   let comunes = 0;
-  tokensX.forEach(function (t) { if (tokensY.indexOf(t) >= 0) comunes++; });
-  const union = tokensX.length + tokensY.length - comunes;
+  significativosX.forEach(function (t) { if (significativosY.indexOf(t) >= 0) comunes++; });
+  const union = significativosX.length + significativosY.length - comunes;
   const jaccard = union > 0 ? comunes / union : 0;
 
   const largo = Math.max(x.length, y.length);

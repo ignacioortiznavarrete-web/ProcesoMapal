@@ -53,10 +53,14 @@ function cargarSap(libro) {
   };
 }
 
-/** Camiones registrados a mano (hoja importada). */
+/**
+ * Camiones registrados a mano (hoja importada y ya consolidada).
+ * Se aplican los filtros de producto y de estado de CONFIG.
+ */
 function cargarPlanilla(libro) {
+  const vacio = { filas: [], proveedores: [], productos: [], excluidosProducto: 0, excluidosEstado: 0 };
   const datos = leerHoja(libro, CONFIG.HOJA_PLANILLA);
-  if (datos.length < 2) return { filas: [], proveedores: [], productos: [] };
+  if (datos.length < 2) return vacio;
 
   const col = ubicarColumnas(datos[0], COLUMNAS.PLANILLA);
   if (col.proveedor < 0) {
@@ -66,6 +70,8 @@ function cargarPlanilla(libro) {
   const filas = [];
   const proveedores = {};
   const productos = {};
+  let excluidosProducto = 0;
+  let excluidosEstado = 0;
 
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
@@ -75,6 +81,12 @@ function cargarPlanilla(libro) {
     if (!proveedor && !guiaTexto && !fecha) continue;
 
     const producto = col.producto >= 0 ? String(fila[col.producto] || '').trim() : '';
+    const estado = col.estado >= 0 ? String(fila[col.estado] || '').trim() : '';
+    if (producto) productos[producto] = true;
+
+    if (!productoIncluido(producto)) { excluidosProducto++; continue; }
+    if (estadoExcluido(estado)) { excluidosEstado++; continue; }
+
     filas.push({
       filaHoja: i + 1,
       numero: col.numero >= 0 ? fila[col.numero] : '',
@@ -87,17 +99,45 @@ function cargarPlanilla(libro) {
       patente: col.patente >= 0 ? String(fila[col.patente] || '').trim() : '',
       pesoBruto: col.pesoBruto >= 0 ? aNumero(fila[col.pesoBruto]) : null,
       ticket: col.ticket >= 0 ? String(fila[col.ticket] || '').trim() : '',
-      observacion: col.observacion >= 0 ? String(fila[col.observacion] || '').trim() : ''
+      estado: estado,
+      observacion: col.observacion >= 0 ? String(fila[col.observacion] || '').trim() : '',
+      hojaOrigen: col.hojaOrigen >= 0 ? String(fila[col.hojaOrigen] || '').trim() : '',
+      filaOrigen: col.filaOrigen >= 0 ? fila[col.filaOrigen] : ''
     });
     if (proveedor) proveedores[proveedor] = true;
-    if (producto) productos[producto] = true;
   }
 
   return {
     filas: filas,
     proveedores: Object.keys(proveedores).sort(),
-    productos: Object.keys(productos).sort()
+    productos: Object.keys(productos).sort(),
+    excluidosProducto: excluidosProducto,
+    excluidosEstado: excluidosEstado
   };
+}
+
+/** ¿El producto está en CONFIG.PRODUCTOS_INCLUIDOS? (lista vacía = todos). */
+function productoIncluido(producto) {
+  const lista = CONFIG.PRODUCTOS_INCLUIDOS || [];
+  if (!lista.length) return true;
+  const clave = normalizar(producto);
+  return lista.some(function (incluido) {
+    const patron = normalizar(incluido);
+    if (!patron) return false;
+    if (patron.charAt(patron.length - 1) === '*') {
+      return clave.indexOf(patron.slice(0, -1).trim()) === 0;
+    }
+    return clave === patron;
+  });
+}
+
+/** ¿La fila viene anulada o rechazada? */
+function estadoExcluido(estado) {
+  const clave = normalizar(estado);
+  if (!clave) return false;
+  return (CONFIG.ESTADOS_EXCLUIDOS || []).some(function (excluido) {
+    return normalizar(excluido) === clave;
+  });
 }
 
 /**

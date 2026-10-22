@@ -8,8 +8,9 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 
 ## Qué hace
 
-- Trae la planilla manual de ingresos (archivo externo, de sólo lectura) a la
-  hoja `Planilla Exportada`.
+- Trae la planilla manual de ingresos (`RECEPCION DIARIA MADERAS`, archivo
+  externo de sólo lectura, con una hoja por mes y encabezados irregulares) y la
+  consolida en la hoja `Planilla Exportada`.
 - Cruza cada camión por Nº de guía contra `Ingresos Sap`.
 - Los camiones que todavía no están en SAP se valorizan con el promedio
   TS/camión del proveedor (hoja `Promedios SAP`).
@@ -31,9 +32,10 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
    clasp push
    ```
 
-3. En `Config.gs` completar `ORIGEN_ID` con el ID de la planilla manual de
-   ingresos (lo que va entre `/d/` y `/edit` en su URL) y, si corresponde,
-   `ORIGEN_HOJA`.
+3. `Config.gs` ya viene apuntando a `RECEPCION DIARIA MADERAS`
+   (`ORIGEN_ID`); revisar `MESES_ATRAS_IMPORTAR` y `PRODUCTOS_INCLUIDOS`.
+   La cuenta que autorice el script tiene que tener acceso de lectura a esa
+   planilla.
 4. Recargar la planilla: aparece el menú **Control Ingreso**.
 5. Correr, en orden:
    - `1. Traer planilla de ingresos`
@@ -48,7 +50,11 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 
 | Parámetro | Para qué |
 |---|---|
-| `ORIGEN_ID`, `ORIGEN_HOJA` | planilla manual de ingresos |
+| `ORIGEN_ID` | planilla manual de ingresos |
+| `ORIGEN_HOJA` | vacío = todas las hojas mensuales; con nombre = sólo esa |
+| `MESES_ATRAS_IMPORTAR` | meses de la planilla manual a traer (0 = todos) |
+| `PRODUCTOS_INCLUIDOS` | productos a controlar (`['ASTILLA VERDE']`) |
+| `ESTADOS_EXCLUIDOS` | estados de la planilla que se descartan (ANULADO...) |
 | `PROMEDIO_VENTANA_DIAS` | días del promedio TS/camión (0 = todo el histórico) |
 | `PROMEDIO_MINIMO_CAMIONES` | mínimo de camiones para confiar en la ventana |
 | `FECHA_BASE` | `'PLANILLA'` (fecha de ingreso físico) o `'SAP'` |
@@ -67,6 +73,9 @@ APIs de Apps Script:
 node tests/prueba.js
 ```
 
-Valida el parseo de números con coma decimal, fechas `dd-mm-aaaa`, claves de
-mes (`oct-2026`), guías con ceros a la izquierda, similitud de razones sociales
-y el cruce completo planilla ↔ SAP ↔ plan.
+Reproduce las dos planillas reales (incluidas las hojas mensuales con
+encabezados sucios) y valida: números con coma decimal, fechas `dd-mm-aaaa`,
+claves de mes (`oct-2026`, `MAY0 2025`), guías con ceros a la izquierda,
+`GUIVAR → COMERCIAL GUIVAR LTDA.` sin confundir `LEON` con `LEONERA`, el
+descarte de productos y filas anuladas, el peso bruto normalizado a toneladas y
+el cruce completo planilla ↔ SAP ↔ plan.

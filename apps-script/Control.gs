@@ -25,12 +25,14 @@ function actualizarControl(periodoSolicitado) {
     ? claveMes(periodoSolicitado)
     : periodoSeleccionado(libro, plan);
 
-  // Índice de guías SAP (una guía puede venir repetida en más de una posición).
+  // Índice de guías SAP por proveedor + guía: los números de guía se repiten
+  // entre proveedores, así que la guía sola no identifica al camión.
   const porGuia = {};
   sap.filas.forEach(function (fila) {
-    if (!fila.guia) return;
-    if (!porGuia[fila.guia]) porGuia[fila.guia] = [];
-    porGuia[fila.guia].push(fila);
+    if (!fila.guia || !fila.desProveedor) return;
+    const clave = claveProveedor(fila.desProveedor) + '|' + fila.guia;
+    if (!porGuia[clave]) porGuia[clave] = [];
+    porGuia[clave].push(fila);
   });
 
   const agregados = {};
@@ -40,10 +42,11 @@ function actualizarControl(periodoSolicitado) {
   // ---- 1) Camiones de la planilla manual -----------------------------------
   planilla.filas.forEach(function (fila) {
     const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
-    const coincidencias = fila.guia ? (porGuia[fila.guia] || []) : [];
-    const disponibles = coincidencias.filter(function (candidato) {
-      return !candidato.usado && coincideProveedor(candidato, equivalencia.sap);
-    });
+    const claveGuia = (fila.guia && equivalencia.sap)
+      ? claveProveedor(equivalencia.sap) + '|' + fila.guia
+      : '';
+    const coincidencias = claveGuia ? (porGuia[claveGuia] || []) : [];
+    const disponibles = coincidencias.filter(function (candidato) { return !candidato.usado; });
     const filaSap = disponibles.length ? disponibles[0] : null;
     if (filaSap) filaSap.usado = true;
 
@@ -60,7 +63,7 @@ function actualizarControl(periodoSolicitado) {
       estado = ESTADO.EN_SAP;
       cantidad = filaSap.cantidad;
       fuente = 'SAP (real)';
-    } else if (!equivalencia.sap) {
+    } else if (!equivalencia.sap && !equivalencia.plan) {
       estado = ESTADO.SIN_HOMOLOGAR;
       fuente = 'sin homologar';
     } else {
@@ -68,12 +71,16 @@ function actualizarControl(periodoSolicitado) {
       promedioUsado = referencia.promedio;
       cantidad = referencia.promedio;
       fuente = 'estimado - ' + referencia.origen;
-      estado = referencia.promedio > 0 ? ESTADO.PENDIENTE : ESTADO.SIN_PROMEDIO;
+      if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
+      else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
+      else estado = ESTADO.PENDIENTE;
     }
 
     if (fila.guia) {
-      if (guiasVistas[fila.guia]) estado = ESTADO.DUPLICADO + ' / ' + estado;
-      guiasVistas[fila.guia] = true;
+      // El duplicado se mide por proveedor + guía, no por la guía sola.
+      const claveDuplicado = claveProveedor(fila.proveedor) + '|' + fila.guia;
+      if (guiasVistas[claveDuplicado]) estado = ESTADO.DUPLICADO + ' / ' + estado;
+      guiasVistas[claveDuplicado] = true;
     }
 
     const esDuplicado = estado.indexOf(ESTADO.DUPLICADO) === 0;
@@ -95,7 +102,9 @@ function actualizarControl(periodoSolicitado) {
       filaSap ? filaSap.documento : '',
       filaSap && filaSap.fecha ? filaSap.fecha : '',
       etiquetaMes(mes),
-      fila.observacion
+      fila.observacion,
+      fila.hojaOrigen,
+      fila.filaOrigen
     ]);
 
     if (mes !== periodo || esDuplicado) return;
@@ -125,7 +134,8 @@ function actualizarControl(periodoSolicitado) {
       '', filaSap.fecha || '', filaSap.desMaterial, '', filaSap.desProveedor, nombrePlan,
       filaSap.guiaTexto, '', '', '', ESTADO.SOLO_SAP,
       redondear(filaSap.cantidad, 3), 'SAP (real)', filaSap.documento,
-      filaSap.fecha || '', etiquetaMes(mes), 'Sin registro en la planilla manual'
+      filaSap.fecha || '', etiquetaMes(mes), 'Sin registro en la planilla manual',
+      CONFIG.HOJA_SAP, filaSap.filaHoja
     ]);
 
     if (mes !== periodo) return;
@@ -151,7 +161,7 @@ function actualizarControl(periodoSolicitado) {
     if (filaPlan.producto) agregado.producto = filaPlan.producto;
   });
 
-  escribirHojaControl(libro, agregados, periodo, promedios);
+  escribirHojaControl(libro, agregados, periodo, promedios, planilla);
   escribirHojaDetalle(libro, detalle);
 
   return {
@@ -160,12 +170,6 @@ function actualizarControl(periodoSolicitado) {
     camionesPlanilla: planilla.filas.length,
     filasSap: sap.filas.length
   };
-}
-
-/** ¿La fila SAP corresponde al proveedor homologado? (si no hay par, no exige). */
-function coincideProveedor(filaSap, proveedorSap) {
-  if (!proveedorSap) return true;
-  return claveProveedor(filaSap.desProveedor) === claveProveedor(proveedorSap);
 }
 
 function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
@@ -232,7 +236,7 @@ const ENCABEZADOS_CONTROL = [
   'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado', 'Alertas'
 ];
 
-function escribirHojaControl(libro, agregados, periodo, promedios) {
+function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   const hoja = obtenerHoja(libro, CONFIG.HOJA_CONTROL, true);
   hoja.clear();
 
@@ -241,15 +245,20 @@ function escribirHojaControl(libro, agregados, periodo, promedios) {
 
   hoja.getRange(1, 1).setValue('CONTROL DE INGRESO vs PLAN')
     .setFontWeight('bold').setFontSize(14);
-  hoja.getRange(2, 1, 2, 6).setValues([
-    ['Período', etiquetaMes(periodo), 'Actualizado', new Date(), 'Base de fecha', CONFIG.FECHA_BASE],
+  const productos = (CONFIG.PRODUCTOS_INCLUIDOS || []).join(', ') || '(todos)';
+  hoja.getRange(2, 1, 2, 8).setValues([
+    ['Período', etiquetaMes(periodo), 'Actualizado', new Date(),
+     'Base de fecha', CONFIG.FECHA_BASE, 'Productos', productos],
     ['Planilla origen', propiedades.getProperty('nombreOrigen') || '(sin importar)',
      'Última importación', importacion || '(sin importar)',
-     'Promedio', 'ventana ' + (CONFIG.PROMEDIO_VENTANA_DIAS || 0) + ' días']
+     'Promedio', 'ventana ' + (CONFIG.PROMEDIO_VENTANA_DIAS || 0) + ' días',
+     'Filas descartadas', planilla.excluidosProducto + ' por producto / ' +
+       planilla.excluidosEstado + ' por estado']
   ]);
   hoja.getRange(2, 1, 2, 1).setFontWeight('bold');
   hoja.getRange(2, 3, 2, 1).setFontWeight('bold');
   hoja.getRange(2, 5, 2, 1).setFontWeight('bold');
+  hoja.getRange(2, 7, 2, 1).setFontWeight('bold');
   hoja.getRange(2, 2).setNote(
     'Escribe aquí el mes a controlar (por ejemplo oct-2026 o 2026-10) y vuelve a actualizar.'
   );
@@ -267,6 +276,10 @@ function escribirHojaControl(libro, agregados, periodo, promedios) {
     return agregados[a].proveedorPlan.localeCompare(agregados[b].proveedorPlan);
   }).forEach(function (clave) {
     const dato = agregados[clave];
+    const sinMovimiento = !dato.camionesPlanilla && !dato.camionesSoloSap &&
+      !dato.tsSap && !dato.tsEstimada;
+    if (!dato.plan && sinMovimiento) return;  // proveedor del Plan sin plan ni ingresos
+
     const tsReal = dato.tsSap + dato.tsSoloSap;
     // Si el proveedor no tiene camiones pendientes, se muestra igual su factor
     // TS/camión como referencia.
@@ -355,7 +368,8 @@ function aplicarSemaforo(hoja, filaInicio, cantidadFilas) {
 const ENCABEZADOS_DETALLE = [
   'Fila planilla', 'Fecha ingreso', 'Producto', 'Proveedor planilla', 'Proveedor SAP',
   'Proveedor Plan', 'Nº guía', 'Patente', 'Peso bruto', 'Nº ticket', 'Estado',
-  'TS asignada', 'Fuente', 'Documento MM', 'Fecha SAP', 'Mes', 'Observación'
+  'TS asignada', 'Fuente', 'Documento MM', 'Fecha SAP', 'Mes', 'Observación',
+  'Hoja origen', 'Fila origen'
 ];
 
 function escribirHojaDetalle(libro, detalle) {

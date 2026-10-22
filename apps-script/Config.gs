@@ -6,12 +6,22 @@
  */
 const CONFIG = {
   // --- Planilla origen (la planilla manual que NO se puede editar) ---------
-  // ID que aparece en la URL: docs.google.com/spreadsheets/d/<ID>/edit
-  ORIGEN_ID: 'PEGAR_AQUI_EL_ID_DE_LA_PLANILLA_ORIGEN',
-  // Nombre de la hoja a traer. Vacío = primera hoja del archivo origen.
+  // 'RECEPCION DIARIA MADERAS': una hoja por mes ('OCTUBRE 2026', 'Sept 2024'...).
+  ORIGEN_ID: '1jtF5B1DUQdx6eCWuFIp7k86suCY8XeBJ6_RoNJ3Bg-A',
+  // Vacío = se importan todas las hojas cuyo nombre sea un mes.
+  // Con un nombre de hoja, se importa sólo esa.
   ORIGEN_HOJA: '',
   // Fila de encabezados en la planilla origen.
   ORIGEN_FILA_ENCABEZADO: 1,
+  // Cuántos meses hacia atrás traer (0 = todas las hojas mensuales).
+  MESES_ATRAS_IMPORTAR: 12,
+
+  // --- Filtros de la planilla manual --------------------------------------
+  // Productos a controlar, tal como se escriben en la columna PRODUCTO.
+  // Lista vacía = todos. Un nombre terminado en '*' funciona como prefijo.
+  PRODUCTOS_INCLUIDOS: ['ASTILLA VERDE'],
+  // Filas con estos valores en la columna ESTADO se descartan.
+  ESTADOS_EXCLUIDOS: ['ANULADO', 'ANULADA', 'NULO', 'NULA', 'RECHAZADO', 'RECHAZADA'],
 
   // --- Hojas de este archivo ----------------------------------------------
   HOJA_SAP: 'Ingresos Sap',
@@ -66,12 +76,15 @@ const COLUMNAS = {
     fecha: ['FECHA', 'Fecha Ingreso'],
     producto: ['PRODUCTO', 'Material'],
     proveedor: ['PROVEEDOR'],
-    comuna: ['COMUNA'],
+    comuna: ['COMUNA', 'ORIGEN'],
     guia: ['N° DE GUÍA', 'N DE GUIA', 'Nº Guia', 'Guia', 'Numero de Guia'],
     patente: ['PATENTE'],
-    pesoBruto: ['PESO BRUTO', 'Peso'],
+    pesoBruto: ['PESO BRUTO (t)', 'PESO BRUTO', 'Peso'],
     ticket: ['N° TICKET', 'N TICKET', 'Ticket'],
-    observacion: ['Observación', 'Observacion', 'Obs']
+    estado: ['ESTADO'],
+    observacion: ['Observación', 'Observacion', 'Obs'],
+    hojaOrigen: ['Hoja origen'],
+    filaOrigen: ['Fila origen']
   },
   PLAN: {
     producto: ['Producto'],
@@ -91,6 +104,7 @@ const ESTADO = {
   PENDIENTE: 'PENDIENTE (estimado)',
   SIN_HOMOLOGAR: 'SIN HOMOLOGAR',
   SIN_PROMEDIO: 'PENDIENTE SIN PROMEDIO',
+  SIN_SAP: 'PENDIENTE (proveedor sin historial SAP)',
   SOLO_SAP: 'SOLO SAP',
   DUPLICADO: 'GUIA DUPLICADA'
 };
