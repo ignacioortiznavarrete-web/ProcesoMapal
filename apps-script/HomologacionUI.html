@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #202124; margin: 0; padding: 12px; }
+    h3 { margin: 0 0 4px; }
+    p.ayuda { margin: 0 0 12px; color: #5f6368; }
+    .barra { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    input[type=text] { padding: 6px; border: 1px solid #dadce0; border-radius: 4px; flex: 1; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #e8eaed; padding: 6px; text-align: left; vertical-align: middle; }
+    th { background: #1f3864; color: #fff; position: sticky; top: 0; }
+    select { width: 100%; padding: 4px; }
+    .contenedor { max-height: 420px; overflow: auto; border: 1px solid #e8eaed; border-radius: 4px; }
+    .pendiente { background: #fff4e5; }
+    .ok { background: #ffffff; }
+    .pie { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+    button { padding: 8px 14px; border: 0; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
+    button.secundario { background: #e8eaed; color: #202124; }
+    #estado { color: #5f6368; }
+    .chip { font-size: 11px; background: #e8eaed; border-radius: 10px; padding: 1px 7px; }
+  </style>
+</head>
+<body>
+  <h3>Homologar proveedores</h3>
+  <p class="ayuda">
+    Une el nombre escrito a mano en la planilla de ingresos con el nombre de SAP y el del Plan.
+    Las filas naranjas están sin confirmar. Lo que guardes queda en la hoja <b>homologacion</b>.
+  </p>
+
+  <div class="barra">
+    <input type="text" id="filtro" placeholder="Filtrar proveedor...">
+    <label><input type="checkbox" id="soloPendientes"> Sólo pendientes</label>
+  </div>
+
+  <div class="contenedor">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28%">Proveedor en la planilla</th>
+          <th style="width:32%">Proveedor SAP</th>
+          <th style="width:32%">Proveedor Plan</th>
+          <th style="width:8%">Camiones</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpo">
+        <tr><td colspan="4">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pie">
+    <button id="guardar" onclick="guardar()">Guardar y recalcular</button>
+    <button class="secundario" onclick="google.script.host.close()">Cerrar</button>
+    <span id="estado"></span>
+  </div>
+
+<script>
+  var datos = { items: [], proveedoresSap: [], proveedoresPlan: [] };
+
+  function cargar() {
+    google.script.run
+      .withSuccessHandler(function (resultado) { datos = resultado; dibujar(); })
+      .withFailureHandler(function (error) {
+        document.getElementById('cuerpo').innerHTML =
+          '<tr><td colspan="4">Error: ' + error.message + '</td></tr>';
+      })
+      .obtenerDatosHomologacion();
+  }
+
+  function opciones(lista, seleccionado) {
+    var html = '<option value="">(sin asignar)</option>';
+    lista.forEach(function (valor) {
+      var sel = (valor === seleccionado) ? ' selected' : '';
+      html += '<option value="' + escapar(valor) + '"' + sel + '>' + escapar(valor) + '</option>';
+    });
+    return html;
+  }
+
+  function escapar(texto) {
+    return String(texto === null || texto === undefined ? '' : texto)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function dibujar() {
+    var filtro = document.getElementById('filtro').value.toLowerCase();
+    var soloPendientes = document.getElementById('soloPendientes').checked;
+    var html = '';
+
+    datos.items.forEach(function (item, indice) {
+      var texto = ((item.planilla || '') + ' ' + (item.sap || '') + ' ' + (item.plan || '')).toLowerCase();
+      if (filtro && texto.indexOf(filtro) < 0) return;
+      var pendiente = !item.confirmado || !item.sap || !item.plan;
+      if (soloPendientes && !pendiente) return;
+
+      var etiqueta = item.planilla
+        ? escapar(item.planilla)
+        : '<i>(sólo en SAP)</i> <span class="chip">SAP</span>';
+
+      html += '<tr class="' + (pendiente ? 'pendiente' : 'ok') + '" data-indice="' + indice + '">' +
+        '<td>' + etiqueta + '</td>' +
+        '<td><select class="sap">' + opciones(datos.proveedoresSap, item.sap) + '</select></td>' +
+        '<td><select class="plan">' + opciones(datos.proveedoresPlan, item.plan) + '</select></td>' +
+        '<td>' + (item.camiones || 0) + '</td>' +
+        '</tr>';
+    });
+
+    document.getElementById('cuerpo').innerHTML = html ||
+      '<tr><td colspan="4">No hay proveedores que coincidan con el filtro.</td></tr>';
+  }
+
+  function guardar() {
+    var mapeos = [];
+    var filas = document.querySelectorAll('#cuerpo tr[data-indice]');
+    for (var i = 0; i < filas.length; i++) {
+      var indice = Number(filas[i].getAttribute('data-indice'));
+      mapeos.push({
+        planilla: datos.items[indice].planilla,
+        sap: filas[i].querySelector('select.sap').value,
+        plan: filas[i].querySelector('select.plan').value
+      });
+    }
+
+    document.getElementById('guardar').disabled = true;
+    document.getElementById('estado').textContent = 'Guardando y recalculando...';
+    google.script.run
+      .withSuccessHandler(function (resultado) {
+        document.getElementById('estado').textContent =
+          'Guardado (' + resultado.actualizadas + ' actualizadas, ' + resultado.agregadas +
+          ' nuevas). Control recalculado para ' + resultado.periodo + '.';
+        document.getElementById('guardar').disabled = false;
+        cargar();
+      })
+      .withFailureHandler(function (error) {
+        document.getElementById('estado').textContent = 'Error: ' + error.message;
+        document.getElementById('guardar').disabled = false;
+      })
+      .guardarHomologacion(mapeos);
+  }
+
+  document.getElementById('filtro').addEventListener('input', dibujar);
+  document.getElementById('soloPendientes').addEventListener('change', dibujar);
+  cargar();
+</script>
+</body>
+</html>
