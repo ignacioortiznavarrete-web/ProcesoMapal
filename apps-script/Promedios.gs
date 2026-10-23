@@ -1,5 +1,50 @@
 /**
- * Promedio de cantidad (TS) por camión, calculado desde los ingresos reales
+ * Agrupa las líneas de SAP en cargas: una carga = un camión = una guía de un
+ * proveedor. Una misma guía puede venir en más de una línea (dos posiciones
+ * del pedido), y en ese caso las cantidades se suman; si se contara línea por
+ * línea, el promedio por carga saldría a la mitad.
+ */
+function agruparCargasSap(sap) {
+  const cargas = [];
+  const porClave = {};
+
+  sap.filas.forEach(function (fila) {
+    if (!fila.desProveedor) return;
+    const clave = fila.guia
+      ? claveProveedor(fila.desProveedor) + '|' + fila.guia
+      : 'SIN GUIA|' + fila.filaHoja;
+
+    if (!porClave[clave]) {
+      porClave[clave] = {
+        clave: clave,
+        proveedor: fila.desProveedor,
+        material: fila.desMaterial,
+        codigoMaterial: fila.material,
+        guia: fila.guia,
+        guiaTexto: fila.guiaTexto,
+        filaHoja: fila.filaHoja,
+        documentos: [],
+        cantidad: 0,
+        fecha: null,
+        lineas: 0,
+        usado: false
+      };
+      cargas.push(porClave[clave]);
+    }
+
+    const carga = porClave[clave];
+    carga.cantidad += fila.cantidad;
+    carga.lineas++;
+    if (fila.documento) carga.documentos.push(fila.documento);
+    if (fila.fecha && (!carga.fecha || fila.fecha > carga.fecha)) carga.fecha = fila.fecha;
+    if (!carga.material && fila.desMaterial) carga.material = fila.desMaterial;
+  });
+
+  return { cargas: cargas, porClave: porClave };
+}
+
+/**
+ * Promedio de cantidad (TS) por carga, calculado desde los ingresos reales
  * de SAP. Es el factor con que se valorizan los camiones que ya ingresaron
  * pero todavía no aparecen en SAP (desfase de las 5 fases).
  *
@@ -7,13 +52,14 @@
  * no desde hoy, para que un export atrasado no deje el promedio en cero.
  */
 function calcularPromedios(sap) {
+  const agrupadas = agruparCargasSap(sap);
   const porProveedorMaterial = {};
   const porProveedor = {};
   const global = nuevoAcumulador();
 
   let fechaTope = null;
-  sap.filas.forEach(function (fila) {
-    if (fila.fecha && (!fechaTope || fila.fecha > fechaTope)) fechaTope = fila.fecha;
+  agrupadas.cargas.forEach(function (carga) {
+    if (carga.fecha && (!fechaTope || carga.fecha > fechaTope)) fechaTope = carga.fecha;
   });
 
   const dias = Number(CONFIG.PROMEDIO_VENTANA_DIAS) || 0;
@@ -21,28 +67,28 @@ function calcularPromedios(sap) {
     ? new Date(fechaTope.getTime() - (dias * 86400000))
     : null;
 
-  sap.filas.forEach(function (fila) {
-    if (!fila.desProveedor || !fila.cantidad) return;
-    const enVentana = !inicioVentana || (fila.fecha && fila.fecha >= inicioVentana);
+  agrupadas.cargas.forEach(function (carga) {
+    if (!carga.cantidad) return;
+    const enVentana = !inicioVentana || (carga.fecha && carga.fecha >= inicioVentana);
 
-    const claveProv = claveProveedor(fila.desProveedor);
-    const claveMat = claveProveedor(fila.desMaterial);
+    const claveProv = claveProveedor(carga.proveedor);
+    const claveMat = claveProveedor(carga.material);
     const claveCombinada = claveProv + '|' + claveMat;
 
     if (!porProveedorMaterial[claveCombinada]) {
       porProveedorMaterial[claveCombinada] = nuevoAcumulador({
-        proveedor: fila.desProveedor,
-        material: fila.desMaterial,
-        codigoMaterial: fila.material
+        proveedor: carga.proveedor,
+        material: carga.material,
+        codigoMaterial: carga.codigoMaterial
       });
     }
     if (!porProveedor[claveProv]) {
-      porProveedor[claveProv] = nuevoAcumulador({ proveedor: fila.desProveedor, material: '(todos)' });
+      porProveedor[claveProv] = nuevoAcumulador({ proveedor: carga.proveedor, material: '(todos)' });
     }
 
-    acumular(porProveedorMaterial[claveCombinada], fila, enVentana);
-    acumular(porProveedor[claveProv], fila, enVentana);
-    acumular(global, fila, enVentana);
+    acumular(porProveedorMaterial[claveCombinada], carga, enVentana);
+    acumular(porProveedor[claveProv], carga, enVentana);
+    acumular(global, carga, enVentana);
   });
 
   [porProveedorMaterial, porProveedor].forEach(function (mapa) {
@@ -55,7 +101,9 @@ function calcularPromedios(sap) {
     porProveedor: porProveedor,
     global: global,
     inicioVentana: inicioVentana,
-    fechaTope: fechaTope
+    fechaTope: fechaTope,
+    cargas: agrupadas.cargas,
+    porCarga: agrupadas.porClave
   };
 }
 
@@ -76,15 +124,15 @@ function nuevoAcumulador(extra) {
   return base;
 }
 
-function acumular(acumulador, fila, enVentana) {
+function acumular(acumulador, carga, enVentana) {
   acumulador.camionesHistorico++;
-  acumulador.totalHistorico += fila.cantidad;
+  acumulador.totalHistorico += carga.cantidad;
   if (enVentana) {
     acumulador.camionesVentana++;
-    acumulador.totalVentana += fila.cantidad;
+    acumulador.totalVentana += carga.cantidad;
   }
-  if (fila.fecha && (!acumulador.ultimaFecha || fila.fecha > acumulador.ultimaFecha)) {
-    acumulador.ultimaFecha = fila.fecha;
+  if (carga.fecha && (!acumulador.ultimaFecha || carga.fecha > acumulador.ultimaFecha)) {
+    acumulador.ultimaFecha = carga.fecha;
   }
 }
 
@@ -182,8 +230,8 @@ function escribirHojaPromedios(libro, promedios) {
 
   const encabezados = [
     'Proveedor SAP', 'Material', 'Código material',
-    'Camiones ventana', 'TS ventana', 'Camiones histórico', 'TS histórico',
-    'TS/camión usado', 'Base del promedio', 'Última fecha SAP'
+    'Cargas ventana', 'TS ventana', 'Cargas histórico', 'TS histórico',
+    'TS/carga usado', 'Base del promedio', 'Última fecha SAP', 'Revisar'
   ];
 
   const filas = [];
@@ -213,6 +261,15 @@ function escribirHojaPromedios(libro, promedios) {
   hoja.autoResizeColumns(1, encabezados.length);
 }
 
+/** ¿El factor quedó fuera del rango esperado por carga? */
+function promedioFueraDeRango(promedio) {
+  if (!promedio) return false;
+  const minimo = Number(CONFIG.TS_POR_CARGA_MINIMO) || 0;
+  const maximo = Number(CONFIG.TS_POR_CARGA_MAXIMO) || 0;
+  if (minimo && promedio < minimo) return true;
+  return !!(maximo && promedio > maximo);
+}
+
 function filaPromedio(registro) {
   return [
     registro.proveedor,
@@ -224,6 +281,10 @@ function filaPromedio(registro) {
     redondear(registro.totalHistorico, 3),
     redondear(registro.promedio, 3),
     registro.base,
-    registro.ultimaFecha || ''
+    registro.ultimaFecha || '',
+    promedioFueraDeRango(registro.promedio)
+      ? 'Fuera del rango esperado (' + (CONFIG.TS_POR_CARGA_MINIMO || 0) + '-' +
+        (CONFIG.TS_POR_CARGA_MAXIMO || 0) + ' TS por carga)'
+      : ''
   ];
 }

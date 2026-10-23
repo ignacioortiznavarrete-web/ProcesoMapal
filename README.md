@@ -13,7 +13,8 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
   por mes y encabezados irregulares) a la hoja `Planilla Exportada`.
 - Cruza cada camión por Nº de guía contra `Ingresos Sap`.
 - Los camiones que todavía no están en SAP se valorizan con el promedio
-  TS/camión del proveedor (hoja `Promedios SAP`).
+  TS/carga del proveedor (hoja `Promedios SAP`). Una carga es una guía: si el
+  pedido vino en varias posiciones, las líneas se suman antes de promediar.
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
 - Se actualiza solo con un trigger horario.
@@ -56,7 +57,8 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 | `PRODUCTOS_INCLUIDOS` | productos a controlar (`['ASTILLA VERDE']`) |
 | `ESTADOS_EXCLUIDOS` | estados de la planilla que se descartan (ANULADO...) |
 | `PROMEDIO_VENTANA_DIAS` | días del promedio TS/camión (0 = todo el histórico) |
-| `PROMEDIO_MINIMO_CAMIONES` | mínimo de camiones para confiar en la ventana |
+| `PROMEDIO_MINIMO_CAMIONES` | mínimo de cargas para confiar en la ventana |
+| `TS_POR_CARGA_MINIMO` / `MAXIMO` | rango esperado por carga; fuera de él se avisa |
 | `FECHA_BASE` | `'PLANILLA'` (fecha de ingreso físico) o `'SAP'` |
 | `HORAS_ENTRE_ACTUALIZACIONES` | frecuencia del trigger |
 | `UMBRAL_SUGERENCIA` | exigencia para sugerir una homologación |

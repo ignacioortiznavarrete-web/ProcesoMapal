@@ -42,6 +42,11 @@ const CONFIG = {
   // el promedio se recalcula con todo su histórico.
   PROMEDIO_MINIMO_CAMIONES: 5,
 
+  // Rango esperado de TS por carga. Sólo se usa para avisar cuando un promedio
+  // queda fuera (por ejemplo si el export SAP viene con cantidades partidas).
+  TS_POR_CARGA_MINIMO: 8,
+  TS_POR_CARGA_MAXIMO: 18,
+
   // --- Criterio de período -------------------------------------------------
   // 'PLANILLA' = el camión cuenta en el mes de su fecha de ingreso físico
   //              (recomendado: SAP viene desfasado por las 5 fases).

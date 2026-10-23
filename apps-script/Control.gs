@@ -3,7 +3,8 @@
  *
  * Lógica:
  *   1. Cada fila de 'Planilla Exportada' es un camión que ingresó físicamente.
- *   2. Si su Nº de guía ya está en 'Ingresos Sap' -> se usa la cantidad real.
+ *   2. Si su Nº de guía ya está en 'Ingresos Sap' -> se usa la cantidad real de
+ *      esa carga (sumando sus líneas si el pedido vino en varias posiciones).
  *   3. Si todavía no está (desfase de las 5 fases de SAP) -> queda PENDIENTE y
  *      se valoriza con el promedio TS/camión de ese proveedor (ver Promedios.gs).
  *   4. Las guías que están en SAP y no en la planilla manual se suman como
@@ -25,16 +26,6 @@ function actualizarControl(periodoSolicitado) {
     ? claveMes(periodoSolicitado)
     : periodoSeleccionado(libro, plan);
 
-  // Índice de guías SAP por proveedor + guía: los números de guía se repiten
-  // entre proveedores, así que la guía sola no identifica al camión.
-  const porGuia = {};
-  sap.filas.forEach(function (fila) {
-    if (!fila.guia || !fila.desProveedor) return;
-    const clave = claveProveedor(fila.desProveedor) + '|' + fila.guia;
-    if (!porGuia[clave]) porGuia[clave] = [];
-    porGuia[clave].push(fila);
-  });
-
   const agregados = {};
   const detalle = [];
   const guiasVistas = {};
@@ -42,16 +33,18 @@ function actualizarControl(periodoSolicitado) {
   // ---- 1) Camiones de la planilla manual -----------------------------------
   planilla.filas.forEach(function (fila) {
     const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
-    const claveGuia = (fila.guia && equivalencia.sap)
+    // Las cargas de SAP están indexadas por proveedor + guía: los números de
+    // guía se repiten entre proveedores, así que la guía sola no identifica
+    // al camión.
+    const claveCarga = (fila.guia && equivalencia.sap)
       ? claveProveedor(equivalencia.sap) + '|' + fila.guia
       : '';
-    const coincidencias = claveGuia ? (porGuia[claveGuia] || []) : [];
-    const disponibles = coincidencias.filter(function (candidato) { return !candidato.usado; });
-    const filaSap = disponibles.length ? disponibles[0] : null;
-    if (filaSap) filaSap.usado = true;
+    const candidata = claveCarga ? promedios.porCarga[claveCarga] : null;
+    const cargaSap = (candidata && !candidata.usado) ? candidata : null;
+    if (cargaSap) cargaSap.usado = true;
 
     const mesPlanilla = claveMes(fila.fecha);
-    const mesSap = filaSap ? claveMes(filaSap.fecha) : '';
+    const mesSap = cargaSap ? claveMes(cargaSap.fecha) : '';
     const mes = (CONFIG.FECHA_BASE === 'SAP' && mesSap) ? mesSap : (mesPlanilla || mesSap);
 
     let estado;
@@ -59,10 +52,12 @@ function actualizarControl(periodoSolicitado) {
     let fuente = '';
     let promedioUsado = 0;
 
-    if (filaSap) {
+    if (cargaSap) {
       estado = ESTADO.EN_SAP;
-      cantidad = filaSap.cantidad;
-      fuente = 'SAP (real)';
+      cantidad = cargaSap.cantidad;
+      fuente = cargaSap.lineas > 1
+        ? 'SAP (real, ' + cargaSap.lineas + ' líneas)'
+        : 'SAP (real)';
     } else if (!equivalencia.sap && !equivalencia.plan) {
       estado = ESTADO.SIN_HOMOLOGAR;
       fuente = 'sin homologar';
@@ -99,8 +94,8 @@ function actualizarControl(periodoSolicitado) {
       estado,
       redondear(cantidad, 3),
       fuente,
-      filaSap ? filaSap.documento : '',
-      filaSap && filaSap.fecha ? filaSap.fecha : '',
+      cargaSap ? cargaSap.documentos.join(' / ') : '',
+      cargaSap && cargaSap.fecha ? cargaSap.fecha : '',
       etiquetaMes(mes),
       fila.observacion,
       fila.hojaOrigen,
@@ -111,7 +106,7 @@ function actualizarControl(periodoSolicitado) {
 
     const agregado = obtenerAgregado(agregados, equivalencia, fila);
     agregado.camionesPlanilla++;
-    if (filaSap) {
+    if (cargaSap) {
       agregado.camionesEnSap++;
       agregado.tsSap += cantidad;
     } else if (estado === ESTADO.SIN_HOMOLOGAR) {
@@ -124,29 +119,31 @@ function actualizarControl(periodoSolicitado) {
     }
   });
 
-  // ---- 2) Guías que sólo están en SAP --------------------------------------
-  sap.filas.forEach(function (filaSap) {
-    if (filaSap.usado) return;
-    const mes = claveMes(filaSap.fecha);
-    const nombrePlan = resolverPlanDesdeSap(filaSap.desProveedor, homologacion, plan);
+  // ---- 2) Cargas que sólo están en SAP -------------------------------------
+  promedios.cargas.forEach(function (carga) {
+    if (carga.usado) return;
+    const mes = claveMes(carga.fecha);
+    const nombrePlan = resolverPlanDesdeSap(carga.proveedor, homologacion, plan);
 
     detalle.push([
-      '', filaSap.fecha || '', filaSap.desMaterial, '', filaSap.desProveedor, nombrePlan,
-      filaSap.guiaTexto, '', '', '', ESTADO.SOLO_SAP,
-      redondear(filaSap.cantidad, 3), 'SAP (real)', filaSap.documento,
-      filaSap.fecha || '', etiquetaMes(mes), 'Sin registro en la planilla manual',
-      CONFIG.HOJA_SAP, filaSap.filaHoja
+      '', carga.fecha || '', carga.material, '', carga.proveedor, nombrePlan,
+      carga.guiaTexto, '', '', '', ESTADO.SOLO_SAP,
+      redondear(carga.cantidad, 3),
+      carga.lineas > 1 ? 'SAP (real, ' + carga.lineas + ' líneas)' : 'SAP (real)',
+      carga.documentos.join(' / '),
+      carga.fecha || '', etiquetaMes(mes), 'Sin registro en la planilla manual',
+      CONFIG.HOJA_SAP, carga.filaHoja
     ]);
 
     if (mes !== periodo) return;
 
     const agregado = obtenerAgregado(agregados, {
-      sap: filaSap.desProveedor,
+      sap: carga.proveedor,
       plan: nombrePlan,
       estado: nombrePlan ? 'OK' : 'SIN PLAN'
-    }, { producto: filaSap.desMaterial, proveedor: filaSap.desProveedor });
+    }, { producto: carga.material, proveedor: carga.proveedor });
     agregado.camionesSoloSap++;
-    agregado.tsSoloSap += filaSap.cantidad;
+    agregado.tsSoloSap += carga.cantidad;
   });
 
   // ---- 3) Filas del Plan sin movimiento ------------------------------------
@@ -231,8 +228,8 @@ function periodoSeleccionado(libro, plan) {
 
 const ENCABEZADOS_CONTROL = [
   'Producto', 'Proveedor (Plan)', 'Proveedor SAP',
-  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Camiones sólo SAP',
-  'TS real SAP', 'TS/camión prom.', 'TS estimada pendientes', 'TS proyectada',
+  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Cargas sólo SAP',
+  'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes', 'TS proyectada',
   'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado', 'Alertas'
 ];
 
@@ -293,6 +290,9 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
     }
     if (dato.camionesSinPromedio) {
       alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin promedio SAP');
+    }
+    if (promedioFueraDeRango(factor)) {
+      alertas.push('TS/carga fuera de rango (' + redondear(factor, 3) + ')');
     }
     if (!dato.plan && tsProyectada) alertas.push('Proveedor sin plan en el mes');
     if (dato.plan && !tsProyectada) alertas.push('Con plan y sin ingresos');

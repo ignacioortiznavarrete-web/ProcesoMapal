@@ -54,20 +54,27 @@ contar dos veces el mismo camión.
    `Ingresos Sap` (sin ceros a la izquierda, sin puntos ni espacios). El
    proveedor es parte de la llave porque los números de guía se repiten entre
    proveedores.
-   - Guía encontrada → **EN SAP**, cantidad real de SAP.
+   - Guía encontrada → **EN SAP**, cantidad real de esa carga.
    - Guía no encontrada → **PENDIENTE**, se valoriza con el promedio
      `TS/camión` del proveedor (el "carga × promedio de cantidad de SAP":
      1 camión pendiente × promedio TS/camión).
-3. **Promedio**: se calcula desde SAP por `proveedor + material`, con ventana
+3. **Una carga = un camión = una guía.** Antes de promediar, las líneas de SAP
+   se agrupan por `proveedor + guía`: una misma guía puede venir en dos
+   posiciones del pedido y, contada línea por línea, el promedio por carga
+   saldría a la mitad. Por eso el camión recibe la suma de sus líneas y el
+   factor queda en el rango real (10 a 13 TS por carga en astilla verde). Si
+   un promedio se sale de `TS_POR_CARGA_MINIMO`–`TS_POR_CARGA_MAXIMO`, se
+   avisa en `Promedios SAP` y en las alertas del control.
+4. **Promedio**: se calcula desde SAP por `proveedor + material`, con ventana
    móvil de 90 días medida desde la fecha SAP más reciente; si el proveedor no
    tiene suficientes camiones en la ventana se usa su histórico completo, y si
    no tiene nada (proveedor homologado sólo contra el Plan, como `CSC`), el
    promedio general. Todo queda auditable en `Promedios SAP`.
-4. **Sólo SAP**: las guías que están en SAP y nunca se registraron a mano se
+5. **Sólo SAP**: las guías que están en SAP y nunca se registraron a mano se
    suman aparte (`SOLO SAP`) para no perder cargas antiguas.
-5. **Comparación con el plan**: se agrupa por el proveedor del `Plan`:
+6. **Comparación con el plan**: se agrupa por el proveedor del `Plan`:
    `TS proyectada = TS real SAP + TS estimada de pendientes`.
-6. **Homologación**: la hoja `homologacion` manda. El script propone candidatos
+7. **Homologación**: la hoja `homologacion` manda. El script propone candidatos
    comparando por palabras completas (ignora acentos, puntuación y
    LTDA/SPA/EIRL), de modo que `GUIVAR → COMERCIAL GUIVAR LTDA.` y
    `LEON → FORESTAL LEON LTDA` sin confundir `LEON` con `LEONERA`. El diálogo

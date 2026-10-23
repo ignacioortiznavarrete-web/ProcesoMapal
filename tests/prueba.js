@@ -10,7 +10,8 @@ const { Hoja, Libro, builderRegla } = require('./stub.js');
 // --- Planilla de control ---------------------------------------------------
 const sap = [
   ['Documento MM','Nº Guia','Material','Des. Material','Fecha Contab.','Pedido','Posicion','Texto Posicion','Cantidad','Credito FSC(TS)','UM','Proveedor','Des. Proveedor','Destino','Rol','Comuna','Predio','FSC(S/N)','% de FSC','Codigo FSC','Direccion Planta','Usuario'],
-  ['5022336511','53791','3000039','ASTILLA VERDE (TS)','01-10-2026','4800084620',20,'ASTILLA VERDE (TS) FSC-CW','12,777',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022336511','53791','3000039','ASTILLA VERDE (TS)','01-10-2026','4800084620',10,'ASTILLA VERDE (TS) FSC-CW','6,377',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022336511','53791','3000039','ASTILLA VERDE (TS)','01-10-2026','4800084620',20,'ASTILLA VERDE (TS) FSC-CW','6,400',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022336512','53792','3000039','ASTILLA VERDE (TS)','02-10-2026','4800084620',20,'ASTILLA VERDE (TS) FSC-CW','13,223',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022336513','53793','3000039','ASTILLA VERDE (TS)','03-10-2026','4800084620',20,'ASTILLA VERDE (TS) FSC-CW','13,000',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022350777','72865','3000039','ASTILLA VERDE (TS)','05-10-2026','4800084631',10,'ASTILLA VERDE (TS) FSC-CW','11,841',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
@@ -178,7 +179,6 @@ function valor(proveedor, columna) {
 assert(resumen.camionesPlanilla === 10, 'se descartan VIRUTA y la fila ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones sólo SAP') === 1, 'GUIVAR: 1 guía sólo en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52, 'GUIVAR: 39 TS reales + 13 TS estimadas');
 assert(valor('SERVICIOS DE TRANSPORTE VOLCÁN SPA', 'Camiones pendientes') === 1,
   'la guía 53791 de VOLCAN no se cruza con la 53791 de GUIVAR');
@@ -187,9 +187,22 @@ assert(valor('CSC LTDA.', 'Camiones pendientes') === 1,
 assert(String(valor('ENESA (sin homologar)', 'Alertas')).indexOf('sin homologar') >= 0,
   'ENESA queda marcado como sin homologar');
 
+// Una guía repartida en dos posiciones del pedido es UNA carga: las
+// cantidades se suman y el promedio por carga no se parte a la mitad.
+const promediosHoja = libro.getSheetByName('Promedios SAP').datos;
+const guivarPromedio = promediosHoja.find(f => String(f[0]) === 'COMERCIAL GUIVAR LTDA.' &&
+  String(f[1]) === 'ASTILLA VERDE (TS)') || [];
+assert(guivarPromedio[5] === 3, 'las 4 líneas de SAP de GUIVAR son 3 cargas');
+assert(guivarPromedio[7] === 13, 'TS/carga de GUIVAR = 39/3 = 13 (no 39/4)');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Cargas sólo SAP') === 1,
+  'la carga partida se consume completa, no deja media carga suelta');
+
 const detalle = libro.getSheetByName('Detalle Camiones').datos;
 const guia53792 = detalle.find(f => String(f[6]) === '053792') || [];
 assert(guia53792[10] === 'EN SAP', 'la guía 053792 cruza con la 53792 de SAP');
+const guia53791 = detalle.find(f => String(f[6]) === '53791' && f[3] === 'GUIVAR') || [];
+assert(guia53791[11] === 12.777, 'el camión de la guía partida recibe las dos posiciones sumadas');
+assert(String(guia53791[12]).indexOf('2 líneas') > 0, 'el detalle avisa que la carga venía en 2 líneas');
 const septiembre = detalle.find(f => String(f[6]) === '3285') || [];
 assert(String(septiembre[15]) === 'sep-2026', 'el camión de septiembre queda en su mes');
 assert(septiembre[17] === 'SEPTIEMBRE 2026', 'queda registrada la hoja de origen');
