@@ -255,6 +255,11 @@ function mejorCoincidencia(texto, candidatos) {
 /**
  * Ubica columnas por nombre de encabezado.
  * Devuelve { clave: indice base 0 } y -1 cuando la columna no existe.
+ *
+ * La coincidencia es exacta a propósito: un calce aproximado puede apuntar un
+ * campo a una columna ajena y escribir datos equivocados sin avisar. Cuando el
+ * encabezado no sirve (la planilla origen tiene varios así), la columna se
+ * detecta por contenido en Importar.gs.
  */
 function ubicarColumnas(encabezados, alias) {
   const indices = {};
@@ -265,20 +270,22 @@ function ubicarColumnas(encabezados, alias) {
       indice = claves.indexOf(claveEncabezado(nombre));
       return indice >= 0;
     });
-    if (indice < 0) {
-      // Último recurso: encabezado que contenga el alias.
-      alias[campo].some(function (nombre) {
-        const buscado = claveEncabezado(nombre);
-        if (!buscado) return false;
-        indice = claves.findIndex(function (clave) {
-          return clave && (clave.indexOf(buscado) === 0 || buscado.indexOf(clave) === 0);
-        });
-        return indice >= 0;
-      });
-    }
     indices[campo] = indice;
   });
   return indices;
+}
+
+/**
+ * Valor de celda como texto. Una fecha se formatea dd-mm-aaaa en vez de quedar
+ * como 'Thu Oct 01 2026 00:00:00 GMT-0300', que es lo que da String(fecha).
+ */
+function comoTexto(valor) {
+  if (valor === null || valor === undefined) return '';
+  if (valor instanceof Date) {
+    return dosDigitos(valor.getDate()) + '-' + dosDigitos(valor.getMonth() + 1) +
+      '-' + valor.getFullYear();
+  }
+  return String(valor).trim();
 }
 
 /** Obtiene (o crea) una hoja por nombre. */

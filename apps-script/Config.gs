@@ -4,6 +4,9 @@
  * Todo lo que se ajusta a mano vive en este archivo. El resto del código
  * no debería necesitar cambios al agregar proveedores, meses o materiales.
  */
+// Versión del código, para confirmar qué está pegado en el proyecto.
+const VERSION = '2026-10-23';
+
 const CONFIG = {
   // --- Planilla origen (la planilla manual que NO se puede editar) ---------
   // 'RECEPCION DIARIA MADERAS': una hoja por mes ('OCTUBRE 2026', 'Sept 2024'...).

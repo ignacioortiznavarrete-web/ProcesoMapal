@@ -176,9 +176,7 @@ function pesoEnToneladas(valor) {
 }
 
 function texto(valor) {
-  if (valor === null || valor === undefined) return '';
-  if (valor instanceof Date) return Utilities.formatDate(valor, 'America/Santiago', 'dd-MM-yyyy');
-  return String(valor).trim();
+  return comoTexto(valor);
 }
 
 /** ¿La fecha cae en un rango creíble para un ingreso? */

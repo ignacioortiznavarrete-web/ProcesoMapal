@@ -204,7 +204,12 @@ function escribirHojaPromedios(libro, promedios) {
     hoja.getRange(2, 1, filas.length, encabezados.length).setValues(filas);
   }
   hoja.setFrozenRows(1);
-  hoja.getRange(2, 4, Math.max(filas.length, 1), 5).setNumberFormat('#,##0.000');
+  const alto = Math.max(filas.length, 1);
+  hoja.getRange(2, 4, alto, 1).setNumberFormat('#,##0');       // camiones ventana
+  hoja.getRange(2, 5, alto, 1).setNumberFormat('#,##0.000');   // TS ventana
+  hoja.getRange(2, 6, alto, 1).setNumberFormat('#,##0');       // camiones histórico
+  hoja.getRange(2, 7, alto, 2).setNumberFormat('#,##0.000');   // TS histórico y TS/camión
+  hoja.getRange(2, 10, alto, 1).setNumberFormat('dd-mm-yyyy'); // última fecha SAP
   hoja.autoResizeColumns(1, encabezados.length);
 }
 

@@ -14,6 +14,7 @@ function onOpen() {
     .addItem('Activar actualización automática', 'accionInstalarTrigger')
     .addItem('Desactivar actualización automática', 'accionQuitarTrigger')
     .addItem('Estado del proceso', 'accionEstado')
+    .addItem('Verificar instalación', 'accionVerificar')
     .addToUi();
 }
 
@@ -87,6 +88,56 @@ function accionSincronizarHomologacion() {
     );
   } catch (error) {
     SpreadsheetApp.getUi().alert('No se pudo sincronizar la homologación:\n\n' + error.message);
+  }
+}
+
+/**
+ * Diagnóstico: qué versión está pegada, qué hojas hay y a qué columna quedó
+ * asociado cada campo. Sirve para detectar un archivo pegado a medias.
+ */
+function verificarInstalacion() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const lineas = ['Versión del código: ' + VERSION, ''];
+
+  [CONFIG.HOJA_SAP, CONFIG.HOJA_PLANILLA, CONFIG.HOJA_PLAN, CONFIG.HOJA_HOMOLOGACION]
+    .forEach(function (nombre) {
+      const hoja = libro.getSheetByName(nombre);
+      lineas.push(hoja
+        ? '✓ ' + nombre + ': ' + Math.max(0, hoja.getLastRow() - 1) + ' filas'
+        : '✗ falta la hoja "' + nombre + '"');
+    });
+
+  const datos = leerHoja(libro, CONFIG.HOJA_PLANILLA);
+  if (datos.length) {
+    const col = ubicarColumnas(datos[0], COLUMNAS.PLANILLA);
+    lineas.push('', 'Columnas de "' + CONFIG.HOJA_PLANILLA + '":');
+    Object.keys(col).forEach(function (campo) {
+      const indice = col[campo];
+      lineas.push('  ' + campo + ': ' +
+        (indice >= 0 ? columnaLetra(indice + 1) + ' (' + datos[0][indice] + ')' : 'NO ENCONTRADA'));
+    });
+  }
+
+  const planilla = cargarPlanilla(libro);
+  lineas.push('', 'Camiones leídos: ' + planilla.filas.length +
+    ' | descartados: ' + planilla.excluidosProducto + ' por producto, ' +
+    planilla.excluidosEstado + ' por estado');
+  if (planilla.filas.length) {
+    const primera = planilla.filas[0];
+    lineas.push('Primer camión: hoja origen "' + primera.hojaOrigen +
+      '", fila origen ' + primera.filaOrigen);
+  }
+
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+function accionVerificar() {
+  try {
+    SpreadsheetApp.getUi().alert(verificarInstalacion());
+  } catch (error) {
+    SpreadsheetApp.getUi().alert('No se pudo verificar:\n\n' + error.message);
   }
 }
 

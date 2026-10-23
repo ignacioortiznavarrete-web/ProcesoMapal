@@ -21,24 +21,24 @@ function cargarSap(libro) {
 
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
-    const desProveedor = String(fila[col.desProveedor] || '').trim();
+    const desProveedor = comoTexto(fila[col.desProveedor]);
     const cantidad = aNumero(fila[col.cantidad]);
-    const guiaTexto = col.guia >= 0 ? String(fila[col.guia] || '').trim() : '';
+    const guiaTexto = col.guia >= 0 ? comoTexto(fila[col.guia]) : '';
     if (!desProveedor && !guiaTexto && cantidad === null) continue;
 
     const registro = {
       filaHoja: i + 1,
-      documento: col.documento >= 0 ? String(fila[col.documento] || '').trim() : '',
+      documento: col.documento >= 0 ? comoTexto(fila[col.documento]) : '',
       guiaTexto: guiaTexto,
       guia: normalizarGuia(guiaTexto),
-      material: col.material >= 0 ? String(fila[col.material] || '').trim() : '',
-      desMaterial: col.desMaterial >= 0 ? String(fila[col.desMaterial] || '').trim() : '',
+      material: col.material >= 0 ? comoTexto(fila[col.material]) : '',
+      desMaterial: col.desMaterial >= 0 ? comoTexto(fila[col.desMaterial]) : '',
       fecha: col.fecha >= 0 ? aFecha(fila[col.fecha]) : null,
       cantidad: cantidad === null ? 0 : cantidad,
-      proveedor: col.proveedor >= 0 ? String(fila[col.proveedor] || '').trim() : '',
+      proveedor: col.proveedor >= 0 ? comoTexto(fila[col.proveedor]) : '',
       desProveedor: desProveedor,
-      comuna: col.comuna >= 0 ? String(fila[col.comuna] || '').trim() : '',
-      predio: col.predio >= 0 ? String(fila[col.predio] || '').trim() : '',
+      comuna: col.comuna >= 0 ? comoTexto(fila[col.comuna]) : '',
+      predio: col.predio >= 0 ? comoTexto(fila[col.predio]) : '',
       usado: false
     };
     filas.push(registro);
@@ -75,13 +75,13 @@ function cargarPlanilla(libro) {
 
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
-    const proveedor = String(fila[col.proveedor] || '').trim();
-    const guiaTexto = col.guia >= 0 ? String(fila[col.guia] || '').trim() : '';
+    const proveedor = comoTexto(fila[col.proveedor]);
+    const guiaTexto = col.guia >= 0 ? comoTexto(fila[col.guia]) : '';
     const fecha = col.fecha >= 0 ? aFecha(fila[col.fecha]) : null;
     if (!proveedor && !guiaTexto && !fecha) continue;
 
-    const producto = col.producto >= 0 ? String(fila[col.producto] || '').trim() : '';
-    const estado = col.estado >= 0 ? String(fila[col.estado] || '').trim() : '';
+    const producto = col.producto >= 0 ? comoTexto(fila[col.producto]) : '';
+    const estado = col.estado >= 0 ? comoTexto(fila[col.estado]) : '';
     if (producto) productos[producto] = true;
 
     if (!productoIncluido(producto)) { excluidosProducto++; continue; }
@@ -93,15 +93,15 @@ function cargarPlanilla(libro) {
       fecha: fecha,
       producto: producto,
       proveedor: proveedor,
-      comuna: col.comuna >= 0 ? String(fila[col.comuna] || '').trim() : '',
+      comuna: col.comuna >= 0 ? comoTexto(fila[col.comuna]) : '',
       guiaTexto: guiaTexto,
       guia: normalizarGuia(guiaTexto),
-      patente: col.patente >= 0 ? String(fila[col.patente] || '').trim() : '',
+      patente: col.patente >= 0 ? comoTexto(fila[col.patente]) : '',
       pesoBruto: col.pesoBruto >= 0 ? aNumero(fila[col.pesoBruto]) : null,
-      ticket: col.ticket >= 0 ? String(fila[col.ticket] || '').trim() : '',
+      ticket: col.ticket >= 0 ? comoTexto(fila[col.ticket]) : '',
       estado: estado,
-      observacion: col.observacion >= 0 ? String(fila[col.observacion] || '').trim() : '',
-      hojaOrigen: col.hojaOrigen >= 0 ? String(fila[col.hojaOrigen] || '').trim() : '',
+      observacion: col.observacion >= 0 ? comoTexto(fila[col.observacion]) : '',
+      hojaOrigen: col.hojaOrigen >= 0 ? comoTexto(fila[col.hojaOrigen]) : '',
       filaOrigen: col.filaOrigen >= 0 ? fila[col.filaOrigen] : ''
     });
     if (proveedor) proveedores[proveedor] = true;
@@ -174,9 +174,9 @@ function cargarPlan(libro) {
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
     // La columna Producto viene con celdas combinadas: se arrastra el último valor.
-    const producto = col.producto >= 0 ? String(fila[col.producto] || '').trim() : '';
+    const producto = col.producto >= 0 ? comoTexto(fila[col.producto]) : '';
     if (producto) productoActual = producto;
-    const proveedor = String(fila[col.proveedor] || '').trim();
+    const proveedor = comoTexto(fila[col.proveedor]);
     if (!proveedor) continue;
 
     const cantidades = {};
@@ -216,9 +216,9 @@ function cargarHomologacion(libro) {
   const col = ubicarColumnas(datos[0], COLUMNAS.HOMOLOGACION);
   for (let i = 1; i < datos.length; i++) {
     const fila = datos[i];
-    const sap = col.sap >= 0 ? String(fila[col.sap] || '').trim() : '';
-    const planilla = col.planilla >= 0 ? String(fila[col.planilla] || '').trim() : '';
-    const plan = col.plan >= 0 ? String(fila[col.plan] || '').trim() : '';
+    const sap = col.sap >= 0 ? comoTexto(fila[col.sap]) : '';
+    const planilla = col.planilla >= 0 ? comoTexto(fila[col.planilla]) : '';
+    const plan = col.plan >= 0 ? comoTexto(fila[col.plan]) : '';
     if (!sap && !planilla && !plan) continue;
 
     const registro = { filaHoja: i + 1, sap: sap, planilla: planilla, plan: plan };
