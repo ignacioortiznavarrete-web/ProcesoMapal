@@ -53,6 +53,11 @@ const CONFIG = {
   // 'SAP'      = cuenta en el mes de la fecha de contabilización SAP.
   FECHA_BASE: 'PLANILLA',
 
+  // --- Panel web -----------------------------------------------------------
+  // Meses de historia que viajan al navegador. Las filas van enteras, así que
+  // conviene el mínimo que permita comparar: seis meses de estadística.
+  PANEL_MESES_HISTORIA: 6,
+
   // --- Actualización automática -------------------------------------------
   HORAS_ENTRE_ACTUALIZACIONES: 1,
 

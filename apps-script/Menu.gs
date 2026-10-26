@@ -4,6 +4,8 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Control Ingreso')
+    .addItem('Abrir panel', 'abrirPanel')
+    .addSeparator()
     .addItem('1. Traer planilla de ingresos', 'accionImportar')
     .addItem('2. Homologar proveedores...', 'abrirHomologacion')
     .addItem('3. Actualizar control', 'accionActualizarControl')

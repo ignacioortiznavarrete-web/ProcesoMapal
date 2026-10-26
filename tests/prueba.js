@@ -87,13 +87,32 @@ global.Utilities = {
   formatDate: (fecha, tz, formato) => {
     const d = String(fecha.getDate()).padStart(2, '0');
     const m = String(fecha.getMonth() + 1).padStart(2, '0');
-    return formato === 'dd-MM-yyyy' ? `${d}-${m}-${fecha.getFullYear()}` : fecha.toISOString();
+    const a = fecha.getFullYear();
+    const hh = String(fecha.getHours()).padStart(2, '0');
+    const mm = String(fecha.getMinutes()).padStart(2, '0');
+    const ss = String(fecha.getSeconds()).padStart(2, '0');
+
+    if (formato === 'dd-MM-yyyy') return `${d}-${m}-${a}`;
+    if (formato === 'yyyy-MM') return `${a}-${m}`;
+    if (formato === 'yyyy-MM-dd') return `${a}-${m}-${d}`;
+    if (formato === "yyyy-MM-dd'T'HH:mm:ss") return `${a}-${m}-${d}T${hh}:${mm}:${ss}`;
+
+    return fecha.toISOString();
   }
+};
+global.HtmlService = {
+  createTemplateFromFile: () => ({
+    evaluate: () => ({
+      setTitle: () => ({ setXFrameOptionsMode: () => ({}) }),
+      setWidth: () => ({ setHeight: () => ({}) })
+    })
+  }),
+  XFrameOptionsMode: { ALLOWALL: 'ALLOWALL' }
 };
 
 // --- Carga del código del proyecto ----------------------------------------
 const fs = require('fs');
-const archivos = ['Config.gs','Util.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Control.gs'];
+const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Panel.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
 // Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
 // ayudante para poder tocar la configuración desde la prueba.
@@ -231,6 +250,46 @@ function imprimir(nombre, maxCol) {
     console.log(fila.slice(0, maxCol).map(v => (v instanceof Date ? v.toISOString().slice(0, 10) : v)).join(' | '));
   });
 }
+
+// --- Feriados calculados ---------------------------------------------------
+console.log('\n--- feriados ---');
+assert(pascuaDe_(2026).toISOString().slice(0, 10) === '2026-04-05',
+  'Pascua 2026 cae el 5 de abril');
+assert(feriadosDe_(2024).indexOf('2024-03-29') >= 0,
+  'el Viernes Santo de 2024 es el 29-03 (la lista a mano decía 19-04)');
+assert(feriadosDe_(2026).indexOf('2026-09-18') >= 0, '18 de septiembre');
+assert(feriadosDe_(2026).indexOf('2026-09-21') === -1,
+  'el lunes 21-09-2026 NO es feriado: el 18 cae viernes');
+assert(esDiaHabil('2026-10-01') === true, '1 de octubre de 2026 es hábil');
+assert(esDiaHabil('2026-10-04') === false, 'el domingo no es hábil');
+assert(esDiaHabil('2026-09-18') === false, 'el 18 de septiembre no es hábil');
+assert(diasHabilesEntre('2026-10-01', '2026-10-31').length === 21,
+  'octubre de 2026 tiene 21 días hábiles (22 de lunes a viernes menos el 12)');
+
+// --- Panel -----------------------------------------------------------------
+console.log('\n--- panel ---');
+const panel = getDashboardData();
+
+assert(panel.mes.prefijo === '2026-10', 'el panel abre en el mes en curso');
+assert(panel.habiles.total === 21, 'el panel cuenta los días hábiles del mes');
+assert(panel.habiles.ultimaPlanilla === '2026-10-17',
+  'la referencia del mes llega hasta el último camión de la planilla');
+assert(panel.filas.length > 0, 'el panel recibe las filas del cruce');
+assert(panel.filas.every(f => typeof f.fecha === 'string'),
+  'las fechas viajan como clave, no como objeto Date');
+
+const panelGuivar = panel.filas.filter(f =>
+  f.proveedor === 'COMERCIAL GUIVAR LTDA.' && f.mes === '2026-10');
+assert(panelGuivar.some(f => f.precio === 93),
+  'cada fila trae el precio que le fija el Plan');
+assert(panel.fuente.sinHomologar.length === 1 &&
+  panel.fuente.sinHomologar[0].proveedor === 'ENESA',
+  'el panel avisa de los nombres sin par');
+assert(panel.fuente.corteGlobal === '2026-10-07',
+  'el panel informa hasta dónde cubre SAP');
+assert(panel.promedios.some(x => x.proveedor === 'COMERCIAL GUIVAR LTDA.' &&
+  x.promedio === 13), 'el panel entrega el factor TS/carga por proveedor');
+assert(panel.plan.filas.length === 9, 'el panel entrega el Plan completo');
 
 // --- Mes sin hoja en la planilla origen ------------------------------------
 console.log('\n--- la hoja del mes todavía no existe ---');

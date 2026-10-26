@@ -130,6 +130,14 @@ function claveMes(valor) {
   return '';
 }
 
+/** Clave de día 'AAAA-MM-DD' (la que usan los gráficos y los feriados). */
+function claveFecha(valor) {
+  const fecha = aFecha(valor);
+  if (!fecha) return '';
+  return fecha.getFullYear() + '-' + dosDigitos(fecha.getMonth() + 1) +
+    '-' + dosDigitos(fecha.getDate());
+}
+
 /** Etiqueta legible del mes: '2026-10' -> 'oct-2026'. */
 function etiquetaMes(clave) {
   const m = String(clave || '').match(/^(\d{4})-(\d{2})$/);

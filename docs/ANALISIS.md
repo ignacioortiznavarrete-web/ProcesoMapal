@@ -143,3 +143,50 @@ SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
 - Proveedores que aparecen en la planilla pero no están en el Plan (por
   ejemplo `MASISA` en astilla verde) salen listados con la alerta
   "Proveedor sin plan en el mes".
+
+## El panel web
+
+`Panel.gs` + `Panel.html`. Una sola llamada (`getDashboardData`) entrega todo
+lo que la pantalla necesita; el navegador filtra y dibuja sin volver al
+servidor.
+
+El cruce no se repite ahí: lo resuelve `Motor.gs`, el mismo que escribe las
+hojas. Si cada salida lo resolviera por su cuenta, tarde o temprano dirían
+cifras distintas del mismo mes, y un panel que se contradice con su propia
+planilla no se vuelve a mirar.
+
+Lo que el panel agrega sobre las filas del motor:
+
+- **Días hábiles con feriados calculados** (`Feriados.gs`): Pascua por el
+  algoritmo gregoriano, el solsticio de junio por Meeus (el Día de los Pueblos
+  Indígenas no es un 20 ni un 21 fijo) y las leyes 19.973 y 20.299, que corren
+  el 29 de junio, el 12 de octubre y el 31 de octubre según el día en que
+  caen. Lo único a mano es `FERIADOS_EXTRA`, para el feriado que declara una
+  ley puntual y ninguna regla predice.
+- **El plan prorrateado**: plan del mes × días hábiles corridos / días hábiles
+  del mes. Sólo se compara dentro del mes vigente y sin filtro de fuente ni
+  búsqueda: contra un rango que cruza meses sería comparar con otra cosa y
+  llamarla cumplimiento.
+- **El precio de cada fila**, del Plan por producto y proveedor, y de ahí el
+  monto proyectado y la cobertura de precio.
+
+### Qué muestra
+
+| Sección | Para qué |
+|---|---|
+| La regla del mes | lo real, lo estimado, el plan a la fecha y el cierre, en un solo instrumento |
+| Lectura | ocho cifras: real, estimado, plan, desvío, cierre, ritmo, sin cruce, cobertura de precio |
+| Qué mirar hoy | las desviaciones escritas en una frase, con su cifra |
+| Confiabilidad | cuánto del avance está cruzado y de cuántos proveedores depende |
+| Acumulado vs plan | avance, plan prorrateado y proyección al ritmo observado |
+| Ingreso diario | verde lo cruzado, rayado madera lo estimado, línea el plan diario |
+| Mezcla y Pareto | participación por producto y concentración por proveedor |
+| Proveedor por proveedor | plan, camiones, TS, brecha, factor TS/carga y hasta dónde cubre SAP |
+| Detalle | camión por camión, con su estado y de dónde salió su cantidad |
+| Homologación | los nombres sin par, con su asignación en la misma pantalla |
+
+### Qué NO trae todavía
+
+Comparación mes a mes, mapa de aserraderos con rutas, apuntes de reunión con
+pauta automática y plan de acción por proveedor. Nada de eso necesita datos
+nuevos salvo el mapa; se pueden agregar sobre esta misma base.

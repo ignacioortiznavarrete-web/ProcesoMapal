@@ -46,6 +46,8 @@ class Libro {
   getSheetByName(n) { return this.hojas.find(h => h.nombre === n) || null; }
   insertSheet(n) { const h = new Hoja(n, []); this.hojas.push(h); return h; }
   getSheets() { return this.hojas; }
+  getSpreadsheetTimeZone() { return 'America/Santiago'; }
+  getUrl() { return 'https://docs.google.com/spreadsheets/d/prueba'; }
   getName() { return 'Ingreso astilla verde mapal'; }
 }
 

@@ -1,192 +1,85 @@
 /**
- * Motor del control de ingreso.
+ * Control de ingreso en hojas.
  *
- * Lógica:
- *   1. Cada fila de 'Planilla Exportada' es un camión que ingresó físicamente.
- *   2. Si su Nº de guía ya está en 'Ingresos Sap' -> se usa la cantidad real de
- *      esa carga (sumando sus líneas si el pedido vino en varias posiciones).
- *   3. Si todavía no está y su fecha es POSTERIOR a la última fecha que SAP
- *      tiene para ese proveedor -> queda PENDIENTE y se valoriza con el
- *      promedio TS/carga del proveedor (ver Promedios.gs).
- *      Si la fecha ya está cubierta por SAP, no se estima: SAP manda para esos
- *      días y el camión se marca SIN CRUCE para revisar la guía. Estimarlo
- *      sería contar dos veces la misma carga.
- *   4. Las guías que están en SAP y no en la planilla manual se suman como
- *      'SOLO SAP' para no perder cargas antiguas.
- *   5. Todo se agrupa por el proveedor del Plan (vía hoja 'homologacion') y se
- *      compara contra el plan del mes.
+ * El cruce lo resuelve Motor.gs; acá sólo se agrupa por proveedor del Plan,
+ * se compara contra el plan del mes y se escriben las hojas 'Control Ingreso'
+ * y 'Detalle Camiones'.
  */
 function actualizarControl(periodoSolicitado) {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const datos = resolverIngresos(libro);
 
-  const sap = cargarSap(libro);
-  const planilla = cargarPlanilla(libro);
-  const plan = cargarPlan(libro);
-  const homologacion = cargarHomologacion(libro);
-  const promedios = calcularPromedios(sap);
-  escribirHojaPromedios(libro, promedios);
+  escribirHojaPromedios(libro, datos.promedios);
 
   const periodo = periodoSolicitado
     ? claveMes(periodoSolicitado)
-    : periodoSeleccionado(libro, plan);
+    : periodoSeleccionado(libro, datos.plan);
 
-  const agregados = {};
-  const detalle = [];
-  const guiasVistas = {};
+  const agregados = agregarPorProveedor(datos, periodo);
 
-  // ---- 1) Camiones de la planilla manual -----------------------------------
-  planilla.filas.forEach(function (fila) {
-    const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
-    // Las cargas de SAP están indexadas por proveedor + guía: los números de
-    // guía se repiten entre proveedores, así que la guía sola no identifica
-    // al camión.
-    const claveCarga = (fila.guia && equivalencia.sap)
-      ? claveProveedor(equivalencia.sap) + '|' + fila.guia
-      : '';
-    const candidata = claveCarga ? promedios.porCarga[claveCarga] : null;
-    const cargaSap = (candidata && !candidata.usado) ? candidata : null;
-    if (cargaSap) cargaSap.usado = true;
-
-    const mesPlanilla = claveMes(fila.fecha);
-    const mesSap = cargaSap ? claveMes(cargaSap.fecha) : '';
-    const mes = (CONFIG.FECHA_BASE === 'SAP' && mesSap) ? mesSap : (mesPlanilla || mesSap);
-
-    let estado;
-    let cantidad = 0;
-    let fuente = '';
-    let promedioUsado = 0;
-
-    if (cargaSap) {
-      estado = ESTADO.EN_SAP;
-      cantidad = cargaSap.cantidad;
-      fuente = cargaSap.lineas > 1
-        ? 'SAP (real, ' + cargaSap.lineas + ' líneas)'
-        : 'SAP (real)';
-    } else if (!equivalencia.sap && !equivalencia.plan) {
-      estado = ESTADO.SIN_HOMOLOGAR;
-      fuente = 'sin homologar';
-    } else if (corteCubre(promedios, equivalencia.sap, fila.fecha)) {
-      estado = ESTADO.SIN_CRUCE;
-      fuente = 'SAP ya cubre este día: revisar el Nº de guía';
-    } else {
-      const referencia = promedioPara(promedios, equivalencia.sap, fila.producto);
-      promedioUsado = referencia.promedio;
-      cantidad = referencia.promedio;
-      fuente = 'estimado - ' + referencia.origen;
-      if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
-      else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
-      else estado = ESTADO.PENDIENTE;
-    }
-
-    if (fila.guia) {
-      // El duplicado se mide por proveedor + guía, no por la guía sola.
-      const claveDuplicado = claveProveedor(fila.proveedor) + '|' + fila.guia;
-      if (guiasVistas[claveDuplicado]) estado = ESTADO.DUPLICADO + ' / ' + estado;
-      guiasVistas[claveDuplicado] = true;
-    }
-
-    const esDuplicado = estado.indexOf(ESTADO.DUPLICADO) === 0;
-
-    detalle.push([
-      fila.filaHoja,
-      fila.fecha || '',
-      fila.producto,
-      fila.proveedor,
-      equivalencia.sap,
-      equivalencia.plan,
-      fila.guiaTexto,
-      fila.patente,
-      fila.pesoBruto === null ? '' : fila.pesoBruto,
-      fila.ticket,
-      estado,
-      redondear(cantidad, 3),
-      fuente,
-      cargaSap ? cargaSap.documentos.join(' / ') : '',
-      cargaSap && cargaSap.fecha ? cargaSap.fecha : '',
-      etiquetaMes(mes),
-      fila.observacion,
-      fila.hojaOrigen,
-      fila.filaOrigen
-    ]);
-
-    if (mes !== periodo || esDuplicado) return;
-
-    const agregado = obtenerAgregado(agregados, equivalencia, fila);
-    agregado.camionesPlanilla++;
-    if (cargaSap) {
-      agregado.camionesEnSap++;
-      agregado.tsSap += cantidad;
-    } else if (estado === ESTADO.SIN_HOMOLOGAR) {
-      agregado.camionesSinHomologar++;
-    } else if (estado === ESTADO.SIN_CRUCE) {
-      agregado.camionesSinCruce++;
-    } else {
-      agregado.camionesPendientes++;
-      agregado.tsEstimada += cantidad;
-      if (promedioUsado > 0) agregado.promedioUsado = promedioUsado;
-      if (estado === ESTADO.SIN_PROMEDIO) agregado.camionesSinPromedio++;
-    }
-  });
-
-  // ---- 2) Cargas que sólo están en SAP -------------------------------------
-  promedios.cargas.forEach(function (carga) {
-    if (carga.usado) return;
-    const mes = claveMes(carga.fecha);
-    const nombrePlan = resolverPlanDesdeSap(carga.proveedor, homologacion, plan);
-
-    detalle.push([
-      '', carga.fecha || '', carga.material, '', carga.proveedor, nombrePlan,
-      carga.guiaTexto, '', '', '', ESTADO.SOLO_SAP,
-      redondear(carga.cantidad, 3),
-      carga.lineas > 1 ? 'SAP (real, ' + carga.lineas + ' líneas)' : 'SAP (real)',
-      carga.documentos.join(' / '),
-      carga.fecha || '', etiquetaMes(mes), 'Sin registro en la planilla manual',
-      CONFIG.HOJA_SAP, carga.filaHoja
-    ]);
-
-    if (mes !== periodo) return;
-
-    const agregado = obtenerAgregado(agregados, {
-      sap: carga.proveedor,
-      plan: nombrePlan,
-      estado: nombrePlan ? 'OK' : 'SIN PLAN'
-    }, { producto: carga.material, proveedor: carga.proveedor });
-    agregado.camionesSoloSap++;
-    agregado.tsSoloSap += carga.cantidad;
-  });
-
-  // ---- 3) Filas del Plan sin movimiento ------------------------------------
-  plan.filas.forEach(function (filaPlan) {
-    const clave = 'PLAN|' + claveProveedor(filaPlan.proveedor);
-    if (!agregados[clave]) {
-      agregados[clave] = nuevoAgregado(filaPlan.producto, filaPlan.proveedor, '');
-    }
-    const agregado = agregados[clave];
-    agregado.plan += filaPlan.cantidades[periodo] || 0;
-    if (filaPlan.precio !== null && filaPlan.precio !== undefined) agregado.precio = filaPlan.precio;
-    if (filaPlan.producto) agregado.producto = filaPlan.producto;
-  });
-
-  escribirHojaControl(libro, agregados, periodo, promedios, planilla);
-  escribirHojaDetalle(libro, detalle);
+  escribirHojaControl(libro, agregados, periodo, datos);
+  escribirHojaDetalle(libro, datos.filas);
 
   return {
     periodo: periodo,
     proveedores: Object.keys(agregados).length,
-    camionesPlanilla: planilla.filas.length,
-    filasSap: sap.filas.length
+    camionesPlanilla: datos.planilla.filas.length,
+    filasSap: datos.sap.filas.length,
+    cargasSap: datos.promedios.cargas.length
   };
 }
 
-/**
- * ¿La fecha del camión ya está dentro de lo que SAP tiene contabilizado para
- * ese proveedor? Si lo está, su carga ya figura en el total real de SAP.
- */
-function corteCubre(promedios, proveedorSap, fecha) {
-  if (!proveedorSap || !fecha) return false;
-  const corte = corteSapDe(promedios, proveedorSap);
-  if (!corte) return false;
-  return fecha <= corte;
+/** Agrupa las filas del período por proveedor del Plan. */
+function agregarPorProveedor(datos, periodo) {
+  const agregados = {};
+
+  datos.filas.forEach(function (fila) {
+    if (fila.mes !== periodo || fila.duplicado) return;
+
+    const agregado = obtenerAgregado(agregados, fila);
+
+    if (fila.estado === ESTADO.SOLO_SAP) {
+      agregado.camionesSoloSap++;
+      agregado.tsSoloSap += fila.ts;
+      return;
+    }
+
+    agregado.camionesPlanilla++;
+
+    if (fila.estado === ESTADO.EN_SAP) {
+      agregado.camionesEnSap++;
+      agregado.tsSap += fila.ts;
+    } else if (fila.estado === ESTADO.SIN_HOMOLOGAR) {
+      agregado.camionesSinHomologar++;
+    } else if (fila.estado === ESTADO.SIN_CRUCE) {
+      agregado.camionesSinCruce++;
+    } else {
+      agregado.camionesPendientes++;
+      agregado.tsEstimada += fila.ts;
+      if (fila.promedioUsado > 0) agregado.promedioUsado = fila.promedioUsado;
+      if (fila.estado === ESTADO.SIN_PROMEDIO) agregado.camionesSinPromedio++;
+    }
+  });
+
+  // Filas del Plan sin movimiento: un proveedor con plan y sin ingresos
+  // también es noticia.
+  datos.plan.filas.forEach(function (filaPlan) {
+    const clave = 'PLAN|' + claveProveedor(filaPlan.proveedor);
+
+    if (!agregados[clave]) {
+      agregados[clave] = nuevoAgregado(filaPlan.producto, filaPlan.proveedor, '');
+    }
+
+    const agregado = agregados[clave];
+
+    agregado.plan += filaPlan.cantidades[periodo] || 0;
+    if (filaPlan.precio !== null && filaPlan.precio !== undefined) {
+      agregado.precio = filaPlan.precio;
+    }
+    if (filaPlan.producto) agregado.producto = filaPlan.producto;
+  });
+
+  return agregados;
 }
 
 function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
@@ -211,35 +104,40 @@ function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
 }
 
 /** Agrupa por proveedor del Plan; si no hay, por el de SAP; si no, el manual. */
-function obtenerAgregado(agregados, equivalencia, fila) {
+function obtenerAgregado(agregados, fila) {
   let clave;
   let proveedorPlan;
-  if (equivalencia.plan) {
-    clave = 'PLAN|' + claveProveedor(equivalencia.plan);
-    proveedorPlan = equivalencia.plan;
-  } else if (equivalencia.sap) {
-    clave = 'SAP|' + claveProveedor(equivalencia.sap);
-    proveedorPlan = equivalencia.sap + ' (sin par en Plan)';
+
+  if (fila.proveedorPlan) {
+    clave = 'PLAN|' + claveProveedor(fila.proveedorPlan);
+    proveedorPlan = fila.proveedorPlan;
+  } else if (fila.proveedorSap) {
+    clave = 'SAP|' + claveProveedor(fila.proveedorSap);
+    proveedorPlan = fila.proveedorSap + ' (sin par en Plan)';
   } else {
-    clave = 'MANUAL|' + claveProveedor(fila.proveedor);
-    proveedorPlan = fila.proveedor + ' (sin homologar)';
+    clave = 'MANUAL|' + claveProveedor(fila.proveedorPlanilla);
+    proveedorPlan = fila.proveedorPlanilla + ' (sin homologar)';
   }
+
   if (!agregados[clave]) {
-    agregados[clave] = nuevoAgregado(fila.producto, proveedorPlan, equivalencia.sap);
+    agregados[clave] = nuevoAgregado(fila.producto, proveedorPlan, fila.proveedorSap);
   }
-  if (!agregados[clave].proveedorSap && equivalencia.sap) {
-    agregados[clave].proveedorSap = equivalencia.sap;
+  if (!agregados[clave].proveedorSap && fila.proveedorSap) {
+    agregados[clave].proveedorSap = fila.proveedorSap;
   }
+
   return agregados[clave];
 }
 
 /** Período a mostrar: celda B2 del control, si no el mes actual, si no el del Plan. */
 function periodoSeleccionado(libro, plan) {
   const hoja = libro.getSheetByName(CONFIG.HOJA_CONTROL);
+
   if (hoja && hoja.getLastRow() >= 2) {
     const clave = claveMes(hoja.getRange(2, 2).getValue());
     if (clave) return clave;
   }
+
   const actual = mesActual();
   if (!plan.meses.length || plan.meses.indexOf(actual) >= 0) return actual;
 
@@ -270,16 +168,20 @@ const COL_CONTROL = {
   alertas: 19
 };
 
-function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
+function escribirHojaControl(libro, agregados, periodo, datos) {
   const hoja = obtenerHoja(libro, CONFIG.HOJA_CONTROL, true);
+  const promedios = datos.promedios;
+  const planilla = datos.planilla;
+
   hoja.clear();
 
   const importacion = ultimaImportacion();
   const propiedades = PropertiesService.getDocumentProperties();
+  const productos = (CONFIG.PRODUCTOS_INCLUIDOS || []).join(', ') || '(todos)';
 
   hoja.getRange(1, 1).setValue('CONTROL DE INGRESO vs PLAN')
     .setFontWeight('bold').setFontSize(14);
-  const productos = (CONFIG.PRODUCTOS_INCLUIDOS || []).join(', ') || '(todos)';
+
   hoja.getRange(2, 1, 3, 8).setValues([
     ['Período', etiquetaMes(periodo), 'Actualizado', new Date(),
      'Base de fecha', CONFIG.FECHA_BASE, 'Productos', productos],
@@ -292,6 +194,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
      'Rango por carga', (CONFIG.TS_POR_CARGA_MINIMO || 0) + ' a ' +
        (CONFIG.TS_POR_CARGA_MAXIMO || 0) + ' TS', '', '', '', '']
   ]);
+
   hoja.getRange(4, 2).setNumberFormat('dd-mm-yyyy');
   hoja.getRange(2, 1, 3, 1).setFontWeight('bold');
   hoja.getRange(2, 3, 3, 1).setFontWeight('bold');
@@ -304,23 +207,26 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   hoja.getRange(3, 4).setNumberFormat('dd-mm-yyyy hh:mm');
 
   const filaEncabezado = 6;
+
   hoja.getRange(filaEncabezado, 1, 1, ENCABEZADOS_CONTROL.length)
     .setValues([ENCABEZADOS_CONTROL])
     .setFontWeight('bold').setBackground('#1f3864').setFontColor('#ffffff')
     .setWrap(true);
 
   const filas = [];
+
   Object.keys(agregados).sort(function (a, b) {
     return agregados[a].proveedorPlan.localeCompare(agregados[b].proveedorPlan);
   }).forEach(function (clave) {
     const dato = agregados[clave];
     const sinMovimiento = !dato.camionesPlanilla && !dato.camionesSoloSap &&
       !dato.tsSap && !dato.tsEstimada;
+
     if (!dato.plan && sinMovimiento) return;  // proveedor del Plan sin plan ni ingresos
 
     const tsReal = dato.tsSap + dato.tsSoloSap;
     // Si el proveedor no tiene camiones pendientes, se muestra igual su factor
-    // TS/camión como referencia.
+    // TS/carga como referencia.
     const factor = dato.promedioUsado || (dato.proveedorSap
       ? promedioPara(promedios, dato.proveedorSap, dato.producto).promedio
       : 0);
@@ -329,6 +235,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
     const corteSap = corteSapDe(promedios, dato.proveedorSap);
     const tsProyectada = tsReal + dato.tsEstimada;
     const alertas = [];
+
     if (dato.camionesSinHomologar) {
       alertas.push(dato.camionesSinHomologar + ' camión(es) sin homologar');
     }
@@ -368,15 +275,17 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   });
 
   if (filas.length) {
-    hoja.getRange(filaEncabezado + 1, 1, filas.length, ENCABEZADOS_CONTROL.length).setValues(filas);
+    hoja.getRange(filaEncabezado + 1, 1, filas.length, ENCABEZADOS_CONTROL.length)
+      .setValues(filas);
 
     const primera = filaEncabezado + 1;
     const ultima = filaEncabezado + filas.length;
     const filaTotal = ultima + 1;
-
     const total = [];
+
     for (let columna = 1; columna <= ENCABEZADOS_CONTROL.length; columna++) {
       const letra = columnaLetra(columna);
+
       if (columna === 1) {
         total.push('TOTAL');
       } else if (columna === COL_CONTROL.factor) {
@@ -395,10 +304,12 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
         total.push('');
       }
     }
+
     hoja.getRange(filaTotal, 1, 1, total.length).setValues([total])
       .setFontWeight('bold').setBackground('#d9e1f2');
 
     const alto = filas.length + 1;
+
     hoja.getRange(primera, COL_CONTROL.primeraSuma, alto, 5).setNumberFormat('#,##0');
     hoja.getRange(primera, 9, alto, 5).setNumberFormat('#,##0.000');  // TS real a Plan TS
     hoja.getRange(primera, COL_CONTROL.avance, alto, 1).setNumberFormat('0.0%');
@@ -418,6 +329,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
 /** Semáforo sobre la columna Avance %. */
 function aplicarSemaforo(hoja, filaInicio, cantidadFilas) {
   const rango = hoja.getRange(filaInicio, COL_CONTROL.avance, cantidadFilas, 1);
+
   const reglas = [
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberLessThan(0.85).setBackground('#f8cbad').setRanges([rango]).build(),
@@ -426,6 +338,7 @@ function aplicarSemaforo(hoja, filaInicio, cantidadFilas) {
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberGreaterThan(1.05).setBackground('#ffe699').setRanges([rango]).build()
   ];
+
   hoja.setConditionalFormatRules(reglas);
 }
 
@@ -436,11 +349,36 @@ const ENCABEZADOS_DETALLE = [
   'Hoja origen', 'Fila origen'
 ];
 
-function escribirHojaDetalle(libro, detalle) {
+function escribirHojaDetalle(libro, filas) {
   const hoja = obtenerHoja(libro, CONFIG.HOJA_DETALLE, true);
+
   hoja.clear();
   hoja.getRange(1, 1, 1, ENCABEZADOS_DETALLE.length).setValues([ENCABEZADOS_DETALLE])
     .setFontWeight('bold').setBackground('#1f3864').setFontColor('#ffffff');
+
+  const detalle = filas.map(function (fila) {
+    return [
+      fila.filaPlanilla,
+      fila.fecha || '',
+      fila.producto,
+      fila.proveedorPlanilla,
+      fila.proveedorSap,
+      fila.proveedorPlan,
+      fila.guia,
+      fila.patente,
+      fila.pesoBruto === null || fila.pesoBruto === undefined ? '' : fila.pesoBruto,
+      fila.ticket,
+      fila.estado,
+      redondear(fila.ts, 3),
+      fila.detalleFuente,
+      fila.documento,
+      fila.fechaSap || '',
+      etiquetaMes(fila.mes),
+      fila.observacion,
+      fila.hojaOrigen,
+      fila.filaOrigen
+    ];
+  });
 
   if (detalle.length) {
     hoja.getRange(2, 1, detalle.length, ENCABEZADOS_DETALLE.length).setValues(detalle);
@@ -449,6 +387,7 @@ function escribirHojaDetalle(libro, detalle) {
     hoja.getRange(2, 9, detalle.length, 1).setNumberFormat('#,##0.000');
     hoja.getRange(2, 12, detalle.length, 1).setNumberFormat('#,##0.000');
   }
+
   hoja.setFrozenRows(1);
   hoja.autoResizeColumns(1, ENCABEZADOS_DETALLE.length);
 }
@@ -457,10 +396,12 @@ function escribirHojaDetalle(libro, detalle) {
 function columnaLetra(numero) {
   let letra = '';
   let n = numero;
+
   while (n > 0) {
     const resto = (n - 1) % 26;
     letra = String.fromCharCode(65 + resto) + letra;
     n = Math.floor((n - 1) / 26);
   }
+
   return letra;
 }

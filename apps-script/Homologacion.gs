@@ -207,6 +207,51 @@ function obtenerDatosHomologacion() {
 }
 
 /**
+ * Escribe un par desde el panel web, sin recalcular las hojas.
+ *
+ * El panel recarga sus datos después, y recalcular el control acá además
+ * dejaría la pantalla esperando por hojas que nadie está mirando.
+ */
+function asignarDesdePanel(proveedorPlanilla, proveedorSap, proveedorPlan) {
+  const nombrePlanilla = String(proveedorPlanilla || '').trim();
+  const nombreSap = String(proveedorSap || '').trim();
+  const nombrePlan = String(proveedorPlan || '').trim();
+
+  if (!nombrePlanilla) {
+    throw new Error('Falta el nombre escrito en la planilla.');
+  }
+
+  if (!nombreSap && !nombrePlan) {
+    throw new Error(
+      'Elige al menos el proveedor SAP o el del Plan: si no, no hay ' +
+      'equivalencia que escribir.'
+    );
+  }
+
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = obtenerHoja(libro, CONFIG.HOJA_HOMOLOGACION, true);
+
+  asegurarEncabezadosHomologacion(hoja);
+
+  const homologacion = cargarHomologacion(libro);
+  const registro = homologacion.porPlanilla[claveProveedor(nombrePlanilla)];
+  const valores = [nombreSap, nombrePlanilla, nombrePlan, 1, 'Confirmado en el panel'];
+
+  if (registro) {
+    hoja.getRange(registro.filaHoja, 1, 1, 5).setValues([valores]);
+  } else {
+    hoja.getRange(hoja.getLastRow() + 1, 1, 1, 5).setValues([valores]);
+  }
+
+  return {
+    planilla: nombrePlanilla,
+    sap: nombreSap,
+    plan: nombrePlan,
+    actualizado: !!registro
+  };
+}
+
+/**
  * Guarda el mapeo que viene del diálogo.
  * mapeos = [{ planilla, sap, plan }]
  */

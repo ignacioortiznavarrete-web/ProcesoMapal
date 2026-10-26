@@ -6,6 +6,22 @@ las 5 fases— con la planilla manual de camiones.
 
 La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 
+## El panel
+
+`apps-script/Panel.html` es un panel web con el mismo motor de cruce que las
+hojas: se abre desde **Control Ingreso › Abrir panel**, o se publica con
+**Implementar › Nueva implementación › Aplicación web** (`doGet`).
+
+Trae la regla del mes, el avance acumulado contra el plan prorrateado por días
+hábiles, el ingreso diario separando lo real de lo estimado, la mezcla por
+producto, el Pareto de proveedores, la tabla proveedor por proveedor con su
+corte de SAP y el detalle camión por camión. La pestaña **Homologación**
+permite asignar los nombres sin par desde la misma pantalla.
+
+Los feriados de Chile se **calculan** (`apps-script/Feriados.gs`), no se
+escriben: una lista a mano se acaba en silencio y a partir de ahí el 18 de
+septiembre cuenta como día hábil y el plan a la fecha queda inflado.
+
 ## Qué hace
 
 - Trae la hoja del **mes en curso** de la planilla manual de ingresos
@@ -20,13 +36,15 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
 - Se actualiza solo con un trigger horario.
+- El cruce vive en `Motor.gs`: las hojas y el panel leen de ahí, así que no
+  pueden decir cifras distintas del mismo mes.
 
 ## Instalación
 
 1. Abrir la planilla `Ingreso astilla verde mapal` →
    **Extensiones › Apps Script**.
 2. Crear un archivo por cada `.gs` de `apps-script/` y pegar el contenido
-   (también `HomologacionUI.html`). Si se usa [clasp](https://github.com/google/clasp):
+   (también los HTML `HomologacionUI` y `Panel`). Si se usa [clasp](https://github.com/google/clasp):
 
    ```bash
    cd apps-script

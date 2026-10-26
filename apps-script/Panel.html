@@ -1,0 +1,3540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapal · Control de ingreso de subproductos</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400..700&display=swap"
+    rel="stylesheet">
+
+  <script>
+    /*
+     * El tema se aplica ANTES de pintar nada. Puesto más abajo, la pantalla
+     * alcanza a mostrarse blanca y después se oscurece, que es el parpadeo
+     * más molesto que puede tener un panel que se abre veinte veces al día.
+     */
+    (function () {
+      try {
+        var t = window.localStorage.getItem('mapal-tema');
+        if (t === 'claro' || t === 'oscuro') {
+          document.documentElement.setAttribute('data-tema', t);
+        }
+      } catch (ignorado) {}
+    })();
+  </script>
+
+  <style>
+    /* =================================================================
+       SISTEMA VISUAL
+       -----------------------------------------------------------------
+       El color del dato significa una sola cosa, siempre la misma:
+
+         verde    = ingreso real, cruzado con SAP por su guía
+         madera   = estimado: camión en la planilla que SAP aún no procesa
+         pizarra  = plan (referencia, no material)
+         ladrillo = riesgo: bajo plan, sin homologar, sin cruce
+
+       Nada decorativo usa esos cuatro.
+
+       Tipografía: Fraunces para titulares (tiene eje óptico y da el aire de
+       un informe impreso), Inter para interfaz y tablas, IBM Plex Mono para
+       cifras — ancho fijo, así dos columnas de números quedan alineadas por
+       construcción y no por suerte.
+       ================================================================= */
+
+    :root {
+      color-scheme: light;
+
+      --paper: #FFFFFF;
+      --paper-2: #FCFBF9;
+      --surface: #F7F5F1;
+      --surface-2: #EDE9E2;
+      --rule: #E1DBD1;
+      --rule-soft: #F0ECE6;
+
+      --ink: #16201A;
+      --ink-2: #4B5A51;
+      --ink-3: #838E86;
+
+      --verde: #14563A;
+      --verde-2: #1E7A50;
+      --verde-soft: #E7F1EB;
+      --verde-banda: #143F2C;
+      --verde-linea: rgba(20, 86, 58, .32);
+
+      --madera: #A96C2A;
+      --madera-2: #C9903F;
+      --madera-soft: #FAF0E1;
+      --madera-linea: rgba(169, 108, 42, .34);
+
+      --pizarra: #4F6376;
+      --pizarra-soft: #EDF1F4;
+
+      --ladrillo: #A3382A;
+      --ladrillo-soft: #FBEBE8;
+      --ladrillo-linea: rgba(163, 56, 42, .38);
+
+      --banda-texto: #FFFFFF;
+      --banda-texto-2: rgba(255, 255, 255, .64);
+      --banda-borde: rgba(255, 255, 255, .2);
+      --banda-fondo: rgba(255, 255, 255, .09);
+      --banda-hueco: rgba(0, 0, 0, .2);
+
+      --globo-fondo: #10281C;
+      --globo-texto: #E9F1EC;
+      --globo-tenue: #9DB8A9;
+      --globo-rule: rgba(233, 241, 236, .16);
+      --globo-sube: #7FD3A3;
+      --globo-baja: #F0A192;
+
+      --velo: rgba(255, 255, 255, .84);
+
+      --display: Fraunces, "Iowan Old Style", Georgia, serif;
+      --body: Inter, "Public Sans", system-ui, -apple-system, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+      --t-micro: 9.5px;
+      --t-mini: 10.5px;
+      --t-fino: 11.5px;
+      --t-chico: 12.5px;
+      --t-base: 13.5px;
+      --t-medio: 15px;
+      --t-panel: clamp(16px, 1.35vw, 18px);
+      --t-vista: clamp(23px, 2.4vw, 31px);
+
+      --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+      --s5: 20px; --s6: 24px; --s7: 32px; --s8: 44px;
+
+      --r1: 6px; --r2: 10px; --r3: 14px; --r-full: 999px;
+
+      --z-columna: 10; --z-cabecera: 20; --z-esquina: 30;
+      --z-barra: 40; --z-velo: 200; --z-globo: 300;
+
+      --ease: cubic-bezier(.22, .61, .36, 1);
+      --sombra: 0 1px 2px rgba(22, 32, 26, .04), 0 10px 26px rgba(22, 32, 26, .07);
+    }
+
+    /* Este panel se mira a las siete de la mañana en planta y a las once de
+       la noche desde la casa. Los cuatro colores del dato se aclaran para
+       mantener contraste sobre fondo oscuro, pero significan lo mismo. */
+    :root[data-tema="oscuro"] {
+      color-scheme: dark;
+      --paper: #131A15; --paper-2: #171F19; --surface: #1A231D;
+      --surface-2: #212C24; --rule: #2C3A31; --rule-soft: #232E27;
+      --ink: #E9EFEA; --ink-2: #AAB9AF; --ink-3: #7C8A82;
+      --verde: #5FBF8C; --verde-2: #7AD3A4; --verde-soft: #16301F;
+      --verde-banda: #0E2318; --verde-linea: rgba(95, 191, 140, .34);
+      --madera: #D69B54; --madera-2: #E7BB80; --madera-soft: #2B2115;
+      --madera-linea: rgba(214, 155, 84, .36);
+      --pizarra: #8FA7BC; --pizarra-soft: #1A242C;
+      --ladrillo: #E08574; --ladrillo-soft: #2E1A17;
+      --ladrillo-linea: rgba(224, 133, 116, .4);
+      --globo-fondo: #06120C; --velo: rgba(19, 26, 21, .86);
+      --sombra: 0 1px 2px rgba(0,0,0,.28), 0 12px 30px rgba(0,0,0,.38);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="claro"]) {
+        color-scheme: dark;
+        --paper: #131A15; --paper-2: #171F19; --surface: #1A231D;
+        --surface-2: #212C24; --rule: #2C3A31; --rule-soft: #232E27;
+        --ink: #E9EFEA; --ink-2: #AAB9AF; --ink-3: #7C8A82;
+        --verde: #5FBF8C; --verde-2: #7AD3A4; --verde-soft: #16301F;
+        --verde-banda: #0E2318; --verde-linea: rgba(95, 191, 140, .34);
+        --madera: #D69B54; --madera-2: #E7BB80; --madera-soft: #2B2115;
+        --madera-linea: rgba(214, 155, 84, .36);
+        --pizarra: #8FA7BC; --pizarra-soft: #1A242C;
+        --ladrillo: #E08574; --ladrillo-soft: #2E1A17;
+        --ladrillo-linea: rgba(224, 133, 116, .4);
+        --globo-fondo: #06120C; --velo: rgba(19, 26, 21, .86);
+        --sombra: 0 1px 2px rgba(0,0,0,.28), 0 12px 30px rgba(0,0,0,.38);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: 78px; }
+
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: var(--body); font-size: var(--t-base); line-height: 1.5;
+      color: var(--ink); background: var(--paper);
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .num, td.number, tfoot td.number, .cifra-val, .portada-val,
+    .regla-tick { font-family: var(--mono); font-feature-settings: "zero" 1; }
+
+    .rotulo-ui, .cifra-tag, .portada-tag, .campo label, thead th {
+      font-family: var(--body); font-size: var(--t-micro); font-weight: 600;
+      letter-spacing: .085em; text-transform: uppercase; color: var(--ink-3);
+    }
+
+    button, input, select, textarea { font: inherit; color: inherit; }
+    ::selection { background: var(--verde); color: var(--paper); }
+
+    :focus-visible {
+      outline: 2px solid var(--verde-2); outline-offset: 2px; border-radius: 3px;
+    }
+
+    /* --- barra ---------------------------------------------------- */
+
+    .barra {
+      position: sticky; top: 0; z-index: var(--z-barra);
+      color: var(--banda-texto); background: var(--verde-banda);
+      border-bottom: 3px solid var(--madera);
+    }
+
+    .barra-fila {
+      display: flex; align-items: center; gap: var(--s5);
+      width: min(1780px, 100%); margin: 0 auto; padding: var(--s3) var(--s6);
+    }
+
+    .marca { display: flex; align-items: center; gap: var(--s3); min-width: 0; flex: 1 1 auto; }
+    .marca-texto { min-width: 0; }
+
+    .marca-titulo {
+      font-family: var(--display); font-optical-sizing: auto;
+      font-size: clamp(17px, 1.7vw, 22px); font-weight: 600;
+      letter-spacing: -.014em; line-height: 1.08;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .marca-contexto {
+      margin-top: 3px; font-family: var(--mono); font-size: var(--t-mini);
+      letter-spacing: .06em; text-transform: uppercase; color: var(--banda-texto-2);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .pestanas {
+      display: flex; gap: 2px; padding: 3px; flex: 0 0 auto;
+      border-radius: var(--r2); background: var(--banda-hueco);
+    }
+
+    .pestana {
+      display: inline-flex; align-items: center; gap: 7px; min-height: 33px;
+      padding: 0 var(--s3); cursor: pointer; font-size: var(--t-chico);
+      font-weight: 600; border: 0; border-radius: var(--r1);
+      background: transparent; color: var(--banda-texto-2);
+      transition: background .18s var(--ease), color .18s var(--ease);
+    }
+
+    .pestana svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .pestana:hover { color: var(--banda-texto); background: rgba(255,255,255,.1); }
+
+    .pestana[aria-selected="true"] {
+      color: var(--verde-banda); background: var(--banda-texto);
+    }
+
+    .barra-fin { display: flex; align-items: center; gap: var(--s2); margin-left: auto; }
+
+    .sello {
+      display: inline-flex; align-items: center; gap: 7px; padding: 6px var(--s3);
+      font-family: var(--mono); font-size: var(--t-micro); color: var(--banda-texto-2);
+      border: 1px solid var(--banda-borde); border-radius: var(--r1);
+      background: var(--banda-hueco); white-space: nowrap;
+    }
+
+    .sello i {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--madera-2); flex: 0 0 auto;
+    }
+
+    .boton {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      min-height: 36px; padding: 0 var(--s4); cursor: pointer; white-space: nowrap;
+      font-size: var(--t-chico); font-weight: 600;
+      border: 1px solid var(--rule); border-radius: var(--r1);
+      background: var(--paper); color: var(--ink);
+      transition: border-color .18s var(--ease), background .18s var(--ease);
+    }
+
+    .boton:hover { border-color: var(--ink-3); background: var(--surface); }
+    .boton svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .boton:disabled { opacity: .5; cursor: wait; }
+    .boton-fino { min-height: 30px; padding: 0 var(--s3); font-size: var(--t-fino); }
+    .boton-icono { width: 36px; padding: 0; flex: 0 0 auto; }
+    .boton-icono svg { width: 17px; height: 17px; }
+
+    .barra .boton {
+      border-color: var(--banda-borde); background: var(--banda-fondo);
+      color: var(--banda-texto);
+    }
+
+    .barra .boton:hover {
+      border-color: rgba(255,255,255,.45); background: rgba(255,255,255,.16);
+    }
+
+    .barra .boton-firme {
+      border-color: var(--banda-texto); background: var(--banda-texto);
+      color: var(--verde-banda); font-weight: 700;
+    }
+
+    .barra .boton-firme:hover { background: #EEF4F0; border-color: #EEF4F0; }
+
+    .icono-luna { display: none; }
+    :root[data-tema="oscuro"] .icono-sol { display: none; }
+    :root[data-tema="oscuro"] .icono-luna { display: block; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="claro"]) .icono-sol { display: none; }
+      :root:not([data-tema="claro"]) .icono-luna { display: block; }
+    }
+
+    main { width: min(1780px, 100%); margin: 0 auto; padding: 0 var(--s6) var(--s8); }
+
+    /* --- portada y la regla del mes -------------------------------- */
+
+    .portada {
+      display: grid; grid-template-columns: minmax(0,1fr) minmax(300px,380px);
+      gap: var(--s7); align-items: end; padding: var(--s6) 0 var(--s5);
+    }
+
+    .titulo-vista {
+      margin: 0; font-family: var(--display); font-optical-sizing: auto;
+      font-size: var(--t-vista); font-weight: 600; letter-spacing: -.018em;
+      line-height: 1.04; text-wrap: balance;
+    }
+
+    .portada-nota {
+      max-width: 62ch; margin-top: var(--s3); font-size: var(--t-base);
+      line-height: 1.6; color: var(--ink-2); text-wrap: pretty;
+    }
+
+    .portada-cifras {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+      background: var(--rule); border: 1px solid var(--rule);
+      border-radius: var(--r2); overflow: hidden;
+    }
+
+    .portada-cifra { min-width: 0; padding: var(--s3) var(--s4); background: var(--paper); }
+
+    .portada-val {
+      margin-top: 7px; font-size: 22px; font-weight: 500;
+      letter-spacing: -.032em; line-height: 1;
+    }
+
+    .portada-val small {
+      font-family: var(--body); font-size: var(--t-mini); font-weight: 500;
+      color: var(--ink-3); margin-left: 3px; letter-spacing: 0;
+    }
+
+    .portada-pie { margin-top: 5px; font-size: var(--t-mini); line-height: 1.35; color: var(--ink-3); }
+
+    .regla { min-width: 0; }
+
+    .regla-cab {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: var(--s5); margin-bottom: var(--s3); flex-wrap: wrap;
+    }
+
+    .regla-titulo {
+      font-family: var(--mono); font-size: var(--t-mini); letter-spacing: .14em;
+      text-transform: uppercase; color: var(--ink-3);
+    }
+
+    .regla-leyenda {
+      display: flex; flex-wrap: wrap; gap: 6px var(--s4);
+      font-size: var(--t-fino); color: var(--ink-2);
+    }
+
+    .regla-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+    .regla-leyenda i { width: 10px; height: 10px; border-radius: 2px; }
+
+    .regla-cuerpo {
+      position: relative; height: 48px; border: 1px solid var(--rule);
+      border-radius: var(--r1); background: var(--surface); overflow: hidden;
+    }
+
+    .regla-tramo { position: absolute; top: 0; bottom: 0; width: 0; transition: width .95s var(--ease); }
+    .regla-real { left: 0; background: var(--verde); }
+
+    .regla-est {
+      background: repeating-linear-gradient(-45deg,
+        var(--madera) 0 5px, var(--madera-2) 5px 10px);
+    }
+
+    .regla-marca, .regla-proy {
+      position: absolute; top: -1px; bottom: -1px; width: 2px;
+      transition: left .95s var(--ease);
+    }
+
+    .regla-marca { background: var(--pizarra); }
+    .regla-proy { background: var(--ink); }
+
+    .regla-marca::after, .regla-proy::after {
+      position: absolute; left: 5px; padding: 2px 6px; content: attr(data-rotulo);
+      font-family: var(--mono); font-size: var(--t-micro); white-space: nowrap;
+      color: var(--paper); border-radius: 3px;
+    }
+
+    .regla-marca::after { top: 4px; background: var(--pizarra); }
+    .regla-proy::after { bottom: 4px; background: var(--ink); }
+    .regla-marca[data-lado="izq"]::after,
+    .regla-proy[data-lado="izq"]::after { left: auto; right: 5px; }
+
+    .regla-escala { position: relative; height: 18px; margin-top: 5px; }
+
+    .regla-tick {
+      position: absolute; top: 0; font-size: var(--t-micro); color: var(--ink-3);
+      transform: translateX(-50%); white-space: nowrap;
+    }
+
+    .regla-tick::before {
+      display: block; width: 1px; height: 4px; margin: -6px auto 2px;
+      content: ""; background: var(--rule);
+    }
+
+    .regla-tick:first-child { transform: none; }
+    .regla-tick:last-child { transform: translateX(-100%); }
+
+    /* --- avisos --------------------------------------------------- */
+
+    .aviso {
+      display: none; margin-bottom: var(--s3); padding: var(--s3) var(--s4);
+      font-size: var(--t-chico); line-height: 1.6;
+      border: 1px solid; border-left-width: 3px; border-radius: var(--r2);
+    }
+
+    .aviso.se-ve { display: block; }
+    .aviso b { font-weight: 600; color: var(--ink); }
+
+    .aviso-nota {
+      color: var(--ink-2); border-color: var(--rule);
+      border-left-color: var(--verde); background: var(--surface);
+    }
+
+    .aviso-ojo {
+      color: var(--madera); border-color: var(--madera-linea);
+      border-left-color: var(--madera); background: var(--madera-soft);
+    }
+
+    .aviso-ojo b { color: var(--madera); }
+
+    .aviso-mal {
+      color: var(--ladrillo); border-color: var(--ladrillo-linea);
+      border-left-color: var(--ladrillo); background: var(--ladrillo-soft);
+      white-space: pre-wrap;
+    }
+
+    /* --- campos y filtros ----------------------------------------- */
+
+    .filtros {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+      gap: var(--s3); align-items: end; margin-bottom: var(--s4);
+      padding: var(--s4); border: 1px solid var(--rule);
+      border-radius: var(--r3); background: var(--paper-2);
+    }
+
+    .campo label { display: block; margin: 0 0 6px 1px; }
+
+    .campo input, .campo select {
+      width: 100%; min-height: 38px; padding: 8px 11px; font-size: var(--t-base);
+      color: var(--ink); border: 1px solid var(--rule); border-radius: var(--r1);
+      background: var(--paper); outline: 0;
+      transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
+    }
+
+    .campo input:hover, .campo select:hover { border-color: var(--ink-3); }
+
+    .campo input:focus, .campo select:focus {
+      border-color: var(--verde-2); box-shadow: 0 0 0 3px var(--verde-linea);
+    }
+
+    .campo-rango { grid-column: span 2; }
+    .rangos { display: flex; flex-wrap: wrap; gap: 5px; }
+    .rangos .pastilla { flex: 1 1 auto; min-height: 38px; }
+
+    .pastilla {
+      font-family: var(--body); font-size: var(--t-chico); font-weight: 500;
+      padding: 6px var(--s3); border: 1px solid var(--rule);
+      border-radius: var(--r-full); background: var(--paper); color: var(--ink-2);
+      cursor: pointer; transition: background .14s var(--ease), color .14s var(--ease);
+    }
+
+    .pastilla:hover { border-color: var(--ink-3); color: var(--ink); }
+
+    .pastilla.activa {
+      background: var(--verde); border-color: var(--verde); color: var(--paper);
+    }
+
+    :root[data-tema="oscuro"] input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1) opacity(.7);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-tema="claro"]) input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1) opacity(.7);
+      }
+    }
+
+    /* --- lectura y paneles ---------------------------------------- */
+
+    .lectura {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+      gap: 1px; margin-bottom: var(--s4); background: var(--rule);
+      border: 1px solid var(--rule); border-radius: var(--r3); overflow: hidden;
+    }
+
+    .cifra { min-width: 0; padding: var(--s3) var(--s4) var(--s4); background: var(--paper); }
+    .cifra-tag { min-height: 26px; line-height: 1.35; }
+
+    .cifra-val {
+      margin-top: 6px; font-size: 20px; font-weight: 500;
+      letter-spacing: -.032em; line-height: 1.05;
+    }
+
+    .cifra-val small {
+      font-family: var(--body); font-size: var(--t-mini); font-weight: 500;
+      color: var(--ink-3); margin-left: 3px; letter-spacing: 0;
+    }
+
+    .cifra-pie { margin-top: 6px; min-height: 28px; font-size: var(--t-mini); line-height: 1.4; color: var(--ink-3); }
+
+    .val-riesgo { color: var(--ladrillo); }
+    .val-verde { color: var(--verde); }
+    .val-madera { color: var(--madera); }
+
+    .pila { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--s4); }
+
+    .par {
+      display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+      gap: var(--s4); align-items: start;
+    }
+
+    .panel {
+      min-width: 0; padding: var(--s5) var(--s5) var(--s6);
+      border: 1px solid var(--rule); border-radius: var(--r3); background: var(--paper);
+      opacity: 0; transform: translateY(12px);
+      transition: opacity .5s var(--ease), transform .5s var(--ease);
+    }
+
+    .panel.se-ve { opacity: 1; transform: none; }
+
+    .panel-cab {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: var(--s4); margin-bottom: var(--s4); flex-wrap: wrap;
+    }
+
+    h2 {
+      margin: 0; font-family: var(--display); font-optical-sizing: auto;
+      font-size: var(--t-panel); font-weight: 600; letter-spacing: -.014em;
+      line-height: 1.2;
+    }
+
+    .panel-nota {
+      margin: 6px 0 0; max-width: 76ch; font-size: var(--t-chico);
+      line-height: 1.55; color: var(--ink-2); text-wrap: pretty;
+    }
+
+    .panel-nota code {
+      font-family: var(--mono); font-size: .92em; padding: 1px 5px;
+      border-radius: 4px; background: var(--surface-2);
+    }
+
+    .conteo {
+      flex: 0 1 auto; padding: 5px var(--s3); font-family: var(--mono);
+      font-size: var(--t-mini); color: var(--ink-2);
+      border: 1px solid var(--rule); border-radius: var(--r-full);
+      background: var(--surface); white-space: nowrap;
+    }
+
+    /* --- gráficos -------------------------------------------------- */
+
+    .grafico { display: block; width: 100%; overflow: visible; }
+
+    .grafico text {
+      font-family: var(--mono); fill: var(--ink-3); font-variant-numeric: tabular-nums;
+    }
+
+    .rejilla { stroke: var(--rule-soft); stroke-width: 1; }
+    .eje { stroke: var(--rule); stroke-width: 1; }
+
+    .traza-plan {
+      fill: none; stroke: var(--pizarra); stroke-width: 1.5; stroke-dasharray: 5 4;
+    }
+
+    .traza-real {
+      fill: none; stroke: var(--verde); stroke-width: 2.4;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .traza-proy {
+      fill: none; stroke: var(--madera); stroke-width: 1.8; stroke-dasharray: 3 4;
+    }
+
+    .traza-acum { fill: none; stroke: var(--pizarra); stroke-width: 1.6; }
+
+    .traza-anim {
+      stroke-dasharray: var(--largo); stroke-dashoffset: var(--largo);
+      animation: trazar 1.05s var(--ease) forwards;
+    }
+
+    @keyframes trazar { to { stroke-dashoffset: 0; } }
+
+    .banda { fill: transparent; cursor: crosshair; }
+
+    .banda-fondo {
+      fill: var(--verde); opacity: 0; pointer-events: none;
+      transition: opacity .12s var(--ease);
+    }
+
+    .banda-viva .banda-fondo { opacity: .07; }
+
+    .guia {
+      stroke: var(--verde); stroke-width: 1; stroke-dasharray: 3 3;
+      stroke-opacity: .5; pointer-events: none;
+    }
+
+    .foco { pointer-events: none; stroke: var(--paper); stroke-width: 2.5; }
+
+    .grafico.enfocando .barra-svg { opacity: .28; }
+    .grafico.enfocando .barra-svg.viva { opacity: 1; }
+    .barra-svg { transition: opacity .16s; }
+
+    .grafico .rotulo {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      fill: var(--ink-2); letter-spacing: 0; text-transform: none;
+      paint-order: stroke; stroke: var(--paper); stroke-width: 3px;
+      stroke-linejoin: round;
+    }
+
+    .grafico .rotulo-verde { fill: var(--verde); }
+    .grafico .rotulo-madera { fill: var(--madera); }
+    .grafico .rotulo-pizarra { fill: var(--pizarra); }
+    .grafico .rotulo-dentro { fill: var(--paper); stroke: none; }
+
+    #globo {
+      position: fixed; z-index: var(--z-globo); top: 0; left: 0;
+      pointer-events: none; max-width: 300px; padding: var(--s3);
+      border-radius: var(--r2); background: var(--globo-fondo);
+      color: var(--globo-texto); box-shadow: 0 12px 34px rgba(6,18,12,.34);
+      font-size: var(--t-chico); line-height: 1.5;
+      opacity: 0; visibility: hidden; transform: translate3d(-9999px,-9999px,0);
+    }
+
+    #globo.viendo { opacity: 1; visibility: visible; }
+
+    .globo-titulo {
+      font-family: var(--display); font-optical-sizing: auto; font-weight: 600;
+      font-size: var(--t-base); line-height: 1.25; margin-bottom: var(--s2);
+      padding-bottom: var(--s2); border-bottom: 1px solid var(--globo-rule);
+      overflow-wrap: anywhere;
+    }
+
+    .globo-sub {
+      display: block; font-family: var(--body); font-weight: 400;
+      font-size: var(--t-fino); color: var(--globo-tenue); margin-top: 3px;
+    }
+
+    .globo-filas {
+      display: grid; grid-template-columns: auto 1fr auto;
+      gap: 5px var(--s2); align-items: baseline;
+    }
+
+    .globo-filas i { width: 9px; height: 9px; border-radius: 2px; align-self: center; }
+    .globo-filas span { color: #B9CFC2; }
+    .globo-filas b { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+    .globo-filas .tenue { color: var(--globo-tenue); }
+    .globo-filas b.sube { color: var(--globo-sube); }
+    .globo-filas b.baja { color: var(--globo-baja); }
+
+    .globo-pie {
+      margin-top: var(--s3); padding-top: var(--s2);
+      border-top: 1px solid var(--globo-rule); font-size: var(--t-fino);
+      color: var(--globo-tenue);
+    }
+
+    /* --- reparto, alertas, medidas -------------------------------- */
+
+    .reparto {
+      display: flex; height: 34px; overflow: hidden;
+      border-radius: var(--r1); background: var(--surface-2);
+    }
+
+    .reparto div {
+      display: grid; place-items: center; font-family: var(--mono);
+      font-size: var(--t-mini); color: var(--paper); cursor: crosshair;
+      transition: flex-grow .6s var(--ease), filter .14s var(--ease);
+    }
+
+    .reparto:hover div { filter: saturate(.45) opacity(.55); }
+    .reparto div:hover { filter: none; }
+
+    .reparto-leyenda { display: grid; gap: var(--s2); margin-top: var(--s4); }
+
+    .reparto-fila {
+      display: grid; grid-template-columns: 11px 1fr auto; gap: var(--s3);
+      align-items: center; font-size: var(--t-chico);
+    }
+
+    .reparto-fila i { width: 11px; height: 11px; border-radius: 3px; }
+    .reparto-fila b { font-family: var(--mono); font-weight: 500; }
+
+    .alertas { display: grid; gap: var(--s2); }
+
+    .alerta {
+      display: grid; grid-template-columns: 8px 1fr auto; gap: var(--s3);
+      align-items: start; padding: var(--s3); font-size: var(--t-chico);
+      line-height: 1.5; border-radius: var(--r2); background: var(--surface);
+    }
+
+    .alerta i {
+      width: 8px; height: 8px; margin-top: 6px; border-radius: 50%;
+      background: var(--ink-3);
+    }
+
+    .alerta[data-nivel="ojo"] i { background: var(--madera); }
+    .alerta[data-nivel="mal"] i { background: var(--ladrillo); }
+    .alerta[data-nivel="bien"] i { background: var(--verde-2); }
+    .alerta b { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+
+    .medida {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: var(--s4); padding: var(--s2) 0;
+      border-bottom: 1px solid var(--rule-soft); font-size: var(--t-chico);
+    }
+
+    .medida:last-child { border-bottom: 0; }
+    .medida span { color: var(--ink-2); }
+    .medida b { font-family: var(--mono); font-weight: 500; }
+
+    .liston {
+      overflow: hidden; height: 6px; margin: 6px 0 2px;
+      border-radius: var(--r-full); background: var(--surface-2);
+    }
+
+    .liston > i {
+      display: block; height: 100%; border-radius: inherit;
+      background: var(--verde); transition: width .8s var(--ease);
+    }
+
+    /* --- tablas --------------------------------------------------- */
+
+    .mandos {
+      display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
+      margin-bottom: var(--s3); padding: var(--s2) var(--s3);
+      border: 1px solid var(--rule); border-radius: var(--r2); background: var(--surface);
+    }
+
+    .mandos input, .mandos select {
+      height: 34px; padding: 0 10px; font-size: var(--t-chico); color: var(--ink);
+      border: 1px solid var(--rule); border-radius: var(--r1);
+      background: var(--paper); outline: 0;
+    }
+
+    .mandos input { flex: 1 1 190px; min-width: 150px; max-width: 300px; }
+    .mandos select.puesta { border-color: var(--verde-2); color: var(--verde); font-weight: 600; }
+
+    .mandos-cuenta {
+      margin-left: auto; font-family: var(--mono); font-size: var(--t-mini);
+      color: var(--ink-3); white-space: nowrap;
+    }
+
+    .tabla-marco {
+      max-height: 540px; overflow: auto; border: 1px solid var(--rule);
+      border-radius: var(--r2); background: var(--paper);
+    }
+
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      font-size: var(--t-chico);
+    }
+
+    thead th {
+      position: sticky; top: 0; z-index: var(--z-cabecera);
+      padding: var(--s3); font-size: var(--t-mini); text-align: left;
+      color: var(--ink-2); background: var(--surface);
+      border-bottom: 1px solid var(--rule); white-space: nowrap;
+    }
+
+    tbody td {
+      padding: var(--s3); border-bottom: 1px solid var(--rule-soft);
+      vertical-align: middle; white-space: nowrap; background: var(--paper);
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr td { transition: background .14s var(--ease); }
+    tbody tr:hover td { background: var(--surface); }
+    th.number, td.number { text-align: right; }
+
+    tfoot td {
+      position: sticky; bottom: 0; z-index: var(--z-cabecera); padding: var(--s3);
+      font-weight: 600; background: var(--surface);
+      border-top: 1px solid var(--rule); white-space: nowrap;
+    }
+
+    .th-orden {
+      display: flex; align-items: center; gap: 5px; width: 100%; padding: 0;
+      cursor: pointer; font: inherit; letter-spacing: inherit;
+      text-transform: inherit; color: inherit; border: 0; background: none;
+    }
+
+    th.number .th-orden { justify-content: flex-end; }
+    .th-orden:hover { color: var(--ink); }
+
+    .th-orden::after {
+      content: '↕'; font-family: var(--mono); font-size: 11px; opacity: .22;
+    }
+
+    th[aria-sort] { color: var(--ink); }
+    th[aria-sort] .th-orden::after { opacity: 1; color: var(--verde); }
+    th[aria-sort="ascending"] .th-orden::after { content: '↑'; }
+    th[aria-sort="descending"] .th-orden::after { content: '↓'; }
+
+    .tabla-fija tbody td:first-child {
+      position: sticky; left: 0; z-index: var(--z-columna);
+      box-shadow: 1px 0 0 var(--rule-soft);
+    }
+
+    .tabla-fija thead th:first-child, .tabla-fija tfoot td:first-child {
+      position: sticky; left: 0; z-index: var(--z-esquina);
+      box-shadow: 1px 0 0 var(--rule);
+    }
+
+    @media (max-width: 720px) {
+      .tabla-fija tbody td:first-child, .tabla-fija thead th:first-child,
+      .tabla-fija tfoot td:first-child { position: static; box-shadow: none; }
+    }
+
+    .sello-fuente {
+      display: inline-flex; align-items: center; padding: 3px 7px;
+      font-family: var(--mono); font-size: var(--t-micro); border-radius: 4px;
+      white-space: nowrap; background: var(--surface-2); color: var(--ink-2);
+    }
+
+    .es-real { color: var(--verde); background: var(--verde-soft); }
+    .es-est { color: var(--madera); background: var(--madera-soft); }
+    .es-flojo { color: var(--ladrillo); background: var(--ladrillo-soft); }
+
+    .puesto {
+      display: inline-grid; place-items: center; width: 22px; height: 22px;
+      font-family: var(--mono); font-size: var(--t-micro); border-radius: var(--r1);
+      color: var(--ink-2); background: var(--surface-2);
+    }
+
+    .marbete {
+      display: inline-flex; margin: 1px 3px 1px 0; padding: 3px 7px;
+      font-size: var(--t-micro); border-radius: 4px;
+      color: var(--ink-2); background: var(--surface-2);
+    }
+
+    .fila-vacia td {
+      padding: var(--s8) var(--s5); text-align: center; color: var(--ink-3);
+      white-space: normal; text-wrap: balance;
+    }
+
+    .vacio {
+      display: grid; place-items: center; min-height: 170px; padding: var(--s6);
+      text-align: center; text-wrap: balance; font-size: var(--t-chico);
+      line-height: 1.6; max-width: 56ch; margin: 0 auto; color: var(--ink-3);
+      border: 1px dashed var(--rule); border-radius: var(--r2); background: var(--surface);
+    }
+
+    .homo-asignar { display: flex; gap: var(--s2); align-items: center; min-width: 340px; }
+    .homo-asignar select { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px;
+      border: 1px solid var(--rule); border-radius: var(--r1); background: var(--paper); }
+    .homo-asignar .boton { flex: 0 0 auto; min-height: 32px; }
+
+    .recado { display: none; padding: var(--s2) var(--s3); font-size: var(--t-fino);
+      line-height: 1.5; border-radius: var(--r1); margin-bottom: var(--s3); }
+    .recado.se-ve { display: block; }
+    .recado-mal { color: var(--ladrillo); background: var(--ladrillo-soft); }
+    .recado-bien { color: var(--verde); background: var(--verde-soft); }
+
+    /* --- carga ---------------------------------------------------- */
+
+    .velo {
+      position: fixed; inset: 0; z-index: var(--z-velo); display: grid;
+      place-items: center; background: var(--velo); backdrop-filter: blur(3px);
+    }
+
+    .velo[hidden] { display: none; }
+    .velo-caja { display: grid; gap: var(--s4); justify-items: center; text-align: center; }
+    .velo-anillos { animation: girar 2.4s linear infinite; }
+
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    .velo-texto {
+      font-family: var(--mono); font-size: var(--t-fino); letter-spacing: .1em;
+      text-transform: uppercase; color: var(--ink-3);
+    }
+
+    [hidden] { display: none !important; }
+
+    @media (max-width: 1150px) {
+      .portada { grid-template-columns: 1fr; align-items: start; gap: var(--s5); }
+      .par { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 1470px) {
+      .barra-fila { flex-wrap: wrap; row-gap: var(--s3); }
+      .barra-fin { width: 100%; margin-left: 0; flex-wrap: wrap; justify-content: flex-end; }
+    }
+
+    @media (max-width: 820px) {
+      .barra-fila { gap: var(--s3); padding: var(--s3) var(--s4); }
+      .marca { flex: 1 1 100%; }
+      .pestanas { flex: 1 1 auto; }
+      .pestana { flex: 1; min-width: 0; justify-content: center; }
+      main { padding: 0 var(--s4) var(--s7); }
+      .portada-cifras { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      .pestana-nombre {
+        position: absolute; width: 1px; height: 1px; overflow: hidden;
+        white-space: nowrap; clip-path: inset(50%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+      .panel { opacity: 1; transform: none; }
+      #globo { transition: none; }
+    }
+
+    /* Este panel se lleva impreso a la reunión. Sin esto sale en cuatro hojas
+       con la barra verde repetida y los paneles en blanco, porque su animación
+       de entrada nunca llegó a dispararse en el papel. */
+    @media print {
+      @page { margin: 12mm; }
+      html, body { background: #fff; color: #000; font-size: 10pt; }
+      .barra, .filtros, .mandos, .velo, #globo, .boton, .pastilla,
+      .conteo { display: none !important; }
+      .th-orden::after { display: none; }
+      main { width: auto; padding: 0; }
+      .panel {
+        opacity: 1 !important; transform: none !important;
+        border: 1px solid #ccc; border-radius: 0; padding: 6mm 0 4mm;
+        break-inside: avoid;
+      }
+      .par { grid-template-columns: 1fr 1fr; }
+      .tabla-marco { max-height: none; overflow: visible; border: 0; }
+      thead th { position: static; background: #f2f2f2; color: #000; }
+      tfoot td { position: static; background: #f2f2f2; }
+      tbody td { background: transparent; }
+      .traza-anim { animation: none; stroke-dashoffset: 0; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="barra">
+    <div class="barra-fila">
+      <div class="marca">
+        <svg width="34" height="34" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+          <circle cx="13" cy="13" r="12" stroke="rgba(255,255,255,.28)"/>
+          <circle cx="13" cy="13" r="9" stroke="#C9903F"/>
+          <circle cx="13" cy="13" r="6" stroke="rgba(255,255,255,.5)"/>
+          <circle cx="13" cy="13" r="3" fill="#C9903F"/>
+        </svg>
+        <div class="marca-texto">
+          <div class="marca-titulo">Ingreso de subproductos · Mapal</div>
+          <div class="marca-contexto" id="contexto" aria-live="polite">Cargando…</div>
+        </div>
+      </div>
+
+      <div class="pestanas" role="tablist" aria-label="Vistas">
+        <button class="pestana" id="pesSuministro" role="tab" aria-selected="true"
+                aria-controls="vistaSuministro" onclick="verVista('suministro')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round"><path d="M4 19V9M9.3 19V5M14.7 19v-7M20 19v-4"/></svg>
+          <span class="pestana-nombre">Suministro</span>
+        </button>
+        <button class="pestana" id="pesHomologacion" role="tab" aria-selected="false"
+                aria-controls="vistaHomologacion" onclick="verVista('homologacion')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 7h9M8 7 5.5 4.5M8 7l-2.5 2.5"/>
+            <path d="M16 17H7m9 0 2.5-2.5M16 17l2.5 2.5"/></svg>
+          <span class="pestana-nombre">Homologación</span>
+        </button>
+      </div>
+
+      <div class="barra-fin">
+        <span class="sello" id="sello"><i></i>Cargando…</span>
+        <button class="boton boton-icono" type="button" onclick="alternarTema()"
+                title="Cambiar entre claro y oscuro" aria-label="Cambiar entre claro y oscuro">
+          <svg class="icono-sol" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2"/>
+            <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></svg>
+          <svg class="icono-luna" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2z"/></svg>
+        </button>
+        <button class="boton" id="botonTraer" type="button" onclick="traerPlanilla()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v3h16v-3"/></svg>
+          Traer planilla del mes
+        </button>
+        <button class="boton boton-firme" type="button" onclick="cargarTodo()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round">
+            <path d="M20 11A8 8 0 0 0 6.3 5.7L4 8"/><path d="M4 4v4h4"/>
+            <path d="M4 13a8 8 0 0 0 13.7 5.3L20 16"/><path d="M20 20v-4h-4"/></svg>
+          Actualizar
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ======================= SUMINISTRO ======================= -->
+    <section id="vistaSuministro" role="tabpanel" aria-labelledby="pesSuministro">
+      <div class="portada">
+        <div class="regla">
+          <div class="regla-cab">
+            <div class="regla-titulo" id="reglaTitulo">La regla del mes</div>
+            <div class="regla-leyenda">
+              <span><i style="background:var(--verde)"></i>Ingreso real (SAP)</span>
+              <span><i style="background:var(--madera)"></i>Estimado por promedio</span>
+              <span><i style="background:var(--pizarra)"></i>Plan a la fecha</span>
+              <span><i style="background:var(--ink)"></i>Proyección de cierre</span>
+            </div>
+          </div>
+          <div class="regla-cuerpo">
+            <div class="regla-tramo regla-real" id="reglaReal"></div>
+            <div class="regla-tramo regla-est" id="reglaEst"></div>
+            <div class="regla-marca" id="reglaMarca" data-rotulo=""></div>
+            <div class="regla-proy" id="reglaProy" data-rotulo=""></div>
+          </div>
+          <div class="regla-escala" id="reglaEscala"></div>
+        </div>
+
+        <div class="portada-cifras" id="portadaCifras"></div>
+      </div>
+
+      <div class="pila">
+        <div class="aviso aviso-mal" id="avisoMal"></div>
+        <div class="aviso aviso-ojo" id="avisoOjo"></div>
+        <div class="aviso aviso-nota se-ve" id="avisoNota">Cargando…</div>
+
+        <section class="filtros">
+          <div class="campo">
+            <label for="desde">Desde</label>
+            <input id="desde" type="date" onchange="render()">
+          </div>
+          <div class="campo">
+            <label for="hasta">Hasta</label>
+            <input id="hasta" type="date" onchange="render()">
+          </div>
+          <div class="campo campo-rango">
+            <label id="rotuloRango">Rango</label>
+            <div class="rangos" role="group" aria-labelledby="rotuloRango">
+              <button type="button" class="pastilla" data-rango="mes">Mes</button>
+              <button type="button" class="pastilla" data-rango="trimestre">3 meses</button>
+              <button type="button" class="pastilla" data-rango="historia">Todo</button>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="fProducto">Producto</label>
+            <select id="fProducto" onchange="render()"><option value="">Todos</option></select>
+          </div>
+          <div class="campo">
+            <label for="fProveedor">Proveedor</label>
+            <select id="fProveedor" onchange="render()"><option value="">Todos</option></select>
+          </div>
+          <div class="campo">
+            <label for="fFuente">Fuente</label>
+            <select id="fFuente" onchange="render()">
+              <option value="">Real + estimado</option>
+              <option value="SAP">Sólo real (SAP)</option>
+              <option value="ESTIMADO">Sólo estimado</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="fBuscar">Buscar</label>
+            <input id="fBuscar" type="search" placeholder="Proveedor, guía, patente…"
+                   oninput="renderLento()">
+          </div>
+          <div class="campo">
+            <label>&nbsp;</label>
+            <button class="boton" type="button" style="width:100%" onclick="limpiarFiltros()">
+              Limpiar</button>
+          </div>
+        </section>
+
+        <section class="lectura" id="lectura"></section>
+
+        <div class="par">
+          <article class="panel">
+            <div class="panel-cab">
+              <div>
+                <h2>Qué mirar hoy</h2>
+                <p class="panel-nota">Lectura automática del período filtrado.</p>
+              </div>
+            </div>
+            <div class="alertas" id="alertas"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-cab">
+              <div>
+                <h2>Confiabilidad y dependencia</h2>
+                <p class="panel-nota">
+                  Cuánto del avance está cruzado con SAP y de cuántos proveedores
+                  depende el suministro.
+                </p>
+              </div>
+            </div>
+            <div id="confianza"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Avance acumulado vs plan</h2>
+              <p class="panel-nota">
+                Evolución acumulada, plan prorrateado por días hábiles —feriados
+                chilenos calculados, no una lista escrita a mano— y proyección al
+                ritmo observado.
+              </p>
+            </div>
+            <div class="conteo" id="conteoAcum">—</div>
+          </div>
+          <div id="grafAcum"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Ingreso diario por fuente</h2>
+              <p class="panel-nota">
+                Verde: camión cruzado con su guía en SAP. Rayado madera: camión de
+                la planilla que SAP todavía no procesa, valorizado con el promedio
+                TS/carga de su proveedor. La línea punteada es el plan diario.
+              </p>
+            </div>
+            <div class="conteo" id="conteoDiario">—</div>
+          </div>
+          <div id="grafDiario"></div>
+        </article>
+
+        <div class="par">
+          <article class="panel">
+            <div class="panel-cab">
+              <div>
+                <h2>Mezcla por producto</h2>
+                <p class="panel-nota">Participación de cada subproducto en el período.</p>
+              </div>
+            </div>
+            <div id="grafMix"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-cab">
+              <div>
+                <h2>Pareto de proveedores</h2>
+                <p class="panel-nota">
+                  Volumen por proveedor y participación acumulada: dónde se
+                  concentra la dependencia.
+                </p>
+              </div>
+              <div class="conteo" id="conteoPareto">—</div>
+            </div>
+            <div id="grafPareto"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Proveedor por proveedor</h2>
+              <p class="panel-nota">
+                Plan del mes, prorrateo a la fecha, camiones cruzados y pendientes,
+                y hasta qué día SAP tiene cargado a cada uno. Desde ese día en
+                adelante sus camiones se estiman.
+              </p>
+            </div>
+            <div class="conteo" id="conteoProv">—</div>
+          </div>
+
+          <div class="mandos">
+            <input type="search" id="bProv" placeholder="Nombre del proveedor"
+                   oninput="renderLento()" aria-label="Buscar proveedor">
+            <select id="fSituacion" onchange="render()" aria-label="Filtrar por situación">
+              <option value="">Con y sin plan</option>
+              <option value="bajo">Bajo plan</option>
+              <option value="sobre">Sobre plan</option>
+              <option value="sinplan">Sin plan del mes</option>
+              <option value="pendientes">Con camiones pendientes</option>
+            </select>
+            <span class="mandos-cuenta" id="cuentaProv" aria-live="polite"></span>
+          </div>
+
+          <div class="tabla-marco tabla-fija">
+            <table data-tabla="prov">
+              <thead><tr>
+                <th data-orden="proveedor">Proveedor</th>
+                <th class="number" data-orden="planMes">Plan mes</th>
+                <th class="number" data-orden="planFecha">Plan a fecha</th>
+                <th class="number" data-orden="camiones">Camiones</th>
+                <th class="number" data-orden="enSap">En SAP</th>
+                <th class="number" data-orden="pendientes">Pendientes</th>
+                <th class="number" data-orden="tsReal">TS real</th>
+                <th class="number" data-orden="tsEstimada">TS estimada</th>
+                <th class="number" data-orden="total">TS total</th>
+                <th class="number" data-orden="brecha">Brecha</th>
+                <th class="number" data-orden="cumplimiento">Cumpl.</th>
+                <th class="number" data-orden="factor">TS/carga</th>
+                <th class="number" data-orden="precio">Precio</th>
+                <th class="number" data-orden="costo">Costo val.</th>
+                <th data-orden="corte">SAP hasta</th>
+                <th data-orden="ultimo">Último ingreso</th>
+              </tr></thead>
+              <tbody id="provBody"></tbody>
+              <tfoot id="provFoot"></tfoot>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Detalle: camión por camión</h2>
+              <p class="panel-nota">
+                Auditoría del dato que entra. Cada fila es un camión de la planilla
+                manual o una carga que sólo existe en SAP.
+              </p>
+            </div>
+            <div class="conteo" id="conteoDetalle">—</div>
+          </div>
+          <div class="tabla-marco tabla-fija">
+            <table data-tabla="detalle">
+              <thead><tr>
+                <th data-orden="fecha">Fecha</th>
+                <th data-orden="estado">Estado</th>
+                <th data-orden="producto">Producto</th>
+                <th data-orden="proveedor">Proveedor</th>
+                <th data-orden="proveedorPlanilla">En la planilla</th>
+                <th data-orden="comuna">Comuna</th>
+                <th data-orden="guia">Nº guía</th>
+                <th data-orden="patente">Patente</th>
+                <th class="number" data-orden="pesoBruto">Peso bruto (t)</th>
+                <th class="number" data-orden="ts">TS</th>
+                <th class="number" data-orden="precio">Precio</th>
+                <th class="number" data-orden="costo">Costo val.</th>
+                <th data-orden="detalleFuente">Fuente</th>
+              </tr></thead>
+              <tbody id="detalleBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ====================== HOMOLOGACIÓN ====================== -->
+    <section id="vistaHomologacion" role="tabpanel" aria-labelledby="pesHomologacion" hidden>
+      <div class="portada">
+        <div>
+          <h2 class="titulo-vista">Un proveedor, un nombre</h2>
+          <p class="portada-nota">
+            SAP escribe cada proveedor de una sola forma; la planilla manual, de
+            muchas, y el Plan de otra. Cuando un nombre no cruza, sus camiones no
+            se pueden valorizar ni comparar contra ningún plan. Acá se asignan, y
+            lo que se guarda queda escrito en la hoja <code>homologacion</code>,
+            que es la que manda sobre el parecido automático.
+          </p>
+        </div>
+        <div class="portada-cifras" id="homoCifras"></div>
+      </div>
+
+      <div class="pila">
+        <div class="recado" id="homoRecado"></div>
+        <div class="aviso aviso-ojo" id="homoOjo"></div>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Nombres sin par</h2>
+              <p class="panel-nota">
+                Camiones del mes cuyo proveedor no cruza con SAP ni con el Plan:
+                hoy suman cero TS. Elige a qué corresponde cada uno.
+              </p>
+            </div>
+            <div class="conteo" id="conteoHomo">—</div>
+          </div>
+          <div id="homoPendientes"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-cab">
+            <div>
+              <h2>Promedio TS por carga</h2>
+              <p class="panel-nota">
+                El factor con que se valoriza cada camión pendiente. Una carga es
+                una guía: si el pedido vino en varias posiciones, sus líneas se
+                suman antes de promediar. Fuera del rango esperado, se avisa.
+              </p>
+            </div>
+            <div class="conteo" id="conteoPromedios">—</div>
+          </div>
+          <div class="tabla-marco tabla-fija">
+            <table data-tabla="promedios">
+              <thead><tr>
+                <th data-orden="proveedor">Proveedor SAP</th>
+                <th data-orden="material">Material</th>
+                <th class="number" data-orden="cargas">Cargas</th>
+                <th class="number" data-orden="promedio">TS/carga</th>
+                <th data-orden="base">Base del promedio</th>
+                <th data-orden="ultima">Última fecha SAP</th>
+                <th data-orden="revisar">Revisar</th>
+              </tr></thead>
+              <tbody id="promediosBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="globo" role="tooltip" aria-hidden="true"></div>
+
+  <div class="velo" id="velo" role="status" aria-live="polite">
+    <div class="velo-caja">
+      <svg class="velo-anillos" width="40" height="40" viewBox="0 0 26 26" fill="none">
+        <circle cx="13" cy="13" r="12" stroke="#E2DCD2"/>
+        <circle cx="13" cy="13" r="9" stroke="#C9903F" stroke-dasharray="30 20"/>
+        <circle cx="13" cy="13" r="6" stroke="#A96C2A" stroke-dasharray="14 10"/>
+        <circle cx="13" cy="13" r="3" fill="#14563A"/>
+      </svg>
+      <div class="velo-texto" id="veloTexto">Cargando</div>
+    </div>
+  </div>
+
+  <script>
+    /* =================================================================
+       ESTADO
+       ================================================================= */
+
+    var DATA = null;
+    var FILAS = [];
+    var METRICAS = null;
+    var PROVEEDORES = [];
+    var VISTA = 'suministro';
+    var ORDEN = {
+      prov: { campo: 'total', sentido: 'desc' },
+      detalle: { campo: 'fecha', sentido: 'desc' },
+      promedios: { campo: 'cargas', sentido: 'desc' }
+    };
+    var APAGADORES = [];
+    var OCUPADO = false;
+
+    var SUAVE = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* El color del producto lo define la hoja de estilos, no el JavaScript:
+       en modo oscuro un verde #14563A escrito a mano queda casi negro sobre
+       fondo casi negro y la barra de mezcla se vuelve un bloque sin datos. */
+    var COLORES_PRODUCTO = ['--verde', '--madera', '--pizarra', '--ladrillo', '--verde-2'];
+    var COLOR_DE = {};
+
+    function colorProducto(nombre) {
+      if (!COLOR_DE[nombre]) {
+        var n = Object.keys(COLOR_DE).length;
+        COLOR_DE[nombre] = COLORES_PRODUCTO[n % COLORES_PRODUCTO.length];
+      }
+
+      return 'var(' + COLOR_DE[nombre] + ')';
+    }
+
+    /* =================================================================
+       TEMA
+
+       Por defecto se sigue al sistema. En cuanto la persona toca el
+       interruptor, esa decisión manda y se recuerda: quien trabaja de
+       noche con el sistema en claro no tiene por qué elegir de nuevo
+       cada vez que abre el panel.
+       ================================================================= */
+
+    function temaActual() {
+      var puesto = document.documentElement.getAttribute('data-tema');
+
+      if (puesto) return puesto;
+
+      return window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'oscuro' : 'claro';
+    }
+
+    function alternarTema() {
+      var nuevo = temaActual() === 'oscuro' ? 'claro' : 'oscuro';
+
+      document.documentElement.setAttribute('data-tema', nuevo);
+
+      try {
+        window.localStorage.setItem('mapal-tema', nuevo);
+      } catch (ignorado) {
+        // Modo incógnito o cookies bloqueadas: el tema vale para esta
+        // sesión y punto. No es motivo para dejar de cambiarlo.
+      }
+    }
+
+    // Se asigna en el arranque, al final del último bloque: las funciones
+    // declaradas en un <script> posterior no existen cuando corre este.
+    var renderLento = function () {};
+
+    /* =================================================================
+       VISTAS
+       ================================================================= */
+
+    function verVista(cual) {
+      VISTA = cual;
+
+      [['suministro', 'vistaSuministro', 'pesSuministro'],
+       ['homologacion', 'vistaHomologacion', 'pesHomologacion']
+      ].forEach(function (v) {
+        var activa = v[0] === cual;
+
+        document.getElementById(v[1]).hidden = !activa;
+        document.getElementById(v[2]).setAttribute('aria-selected', String(activa));
+      });
+
+      if (cual === 'homologacion') dibujarHomologacion();
+
+      window.scrollTo({ top: 0, behavior: SUAVE ? 'smooth' : 'auto' });
+      observarPaneles();
+    }
+
+    /* =================================================================
+       CARGA
+       ================================================================= */
+
+    function cargarTodo() {
+      velo(true, 'Cruzando planilla con SAP');
+      ocultarError();
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          DATA = res;
+
+          try {
+            configurar();
+            render();
+            if (VISTA === 'homologacion') dibujarHomologacion();
+          } catch (err) {
+            mostrarError('Los datos llegaron, pero no se pudieron dibujar.\n\n' +
+              mensaje(err));
+          } finally {
+            // Pase lo que pase el velo se levanta: quedarse encima deja la
+            // pantalla muerta y sin explicación.
+            velo(false);
+          }
+        })
+        .withFailureHandler(function (err) {
+          velo(false);
+          mostrarError(mensaje(err));
+        })
+        .getDashboardData();
+    }
+
+    function traerPlanilla() {
+      var boton = document.getElementById('botonTraer');
+
+      boton.disabled = true;
+      velo(true, 'Trayendo la hoja del mes');
+      ocultarError();
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          boton.disabled = false;
+
+          if (res && res.aviso) {
+            var caja = document.getElementById('avisoOjo');
+            caja.innerHTML = esc(res.aviso);
+            caja.classList.add('se-ve');
+          }
+
+          cargarTodo();
+        })
+        .withFailureHandler(function (err) {
+          boton.disabled = false;
+          velo(false);
+          mostrarError(mensaje(err));
+        })
+        .traerPlanillaDesdePanel();
+    }
+
+    /* =================================================================
+       CONFIGURACIÓN INICIAL
+       ================================================================= */
+
+    function configurar() {
+      var f = DATA.fuente;
+      var mes = DATA.mes;
+
+      document.getElementById('contexto').textContent =
+        'Control de ingreso · ' + mes.etiqueta + ' · ' +
+        DATA.habiles.transcurridos + ' de ' + DATA.habiles.total + ' días hábiles';
+
+      document.getElementById('sello').innerHTML =
+        '<i></i>SAP hasta ' + esc(fecha(f.corteGlobal) || '—') +
+        ' · planilla al ' + esc(fecha(DATA.habiles.ultimaPlanilla) || '—');
+
+      if (!document.getElementById('desde').value) {
+        document.getElementById('desde').value = mes.startKey;
+        document.getElementById('hasta').value = mes.endKey;
+      }
+
+      llenarSelect('fProducto', productosUnicos(), 'Todos');
+      llenarSelect('fProveedor', DATA.filtros.proveedores, 'Todos');
+
+      // --- la nota de siempre: de dónde salió cada cifra ---------------
+      var nota = 'Cada fila de la planilla es un camión. Si su Nº de guía ya ' +
+        'está en <b>' + esc('Ingresos Sap') + '</b> se usa la cantidad real de ' +
+        'esa carga; si no, y su fecha es posterior al último día que SAP tiene ' +
+        'de ese proveedor, se valoriza con su promedio <b>TS/carga</b>.';
+
+      nota += ' SAP está cargado hasta <b>' + esc(fecha(f.corteGlobal) || '—') +
+        '</b> y la planilla llega al <b>' +
+        esc(fecha(DATA.habiles.ultimaPlanilla) || '—') + '</b>.';
+
+      if (f.camionesImportados) {
+        nota += ' Última importación: <b>' + esc(fecha(f.ultimaImportacion)) +
+          '</b>, ' + entero(f.camionesImportados) + ' camiones desde <b>' +
+          esc(f.hojasOrigen || f.nombreOrigen) + '</b>.';
+      }
+
+      if (f.descartadosProducto || f.descartadosEstado) {
+        nota += ' Se descartaron <b>' + entero(f.descartadosProducto) +
+          '</b> filas por producto (se controla ' +
+          esc((f.productosIncluidos || []).join(', ') || 'todo') + ') y <b>' +
+          entero(f.descartadosEstado) + '</b> por estado anulado.';
+      }
+
+      nota += ' El plan se prorratea por días hábiles con los feriados de Chile ' +
+        'calculados, no con una lista escrita a mano: una lista así se acaba en ' +
+        'silencio y a partir de ahí el 18 de septiembre cuenta como día hábil.';
+
+      document.getElementById('avisoNota').innerHTML = nota;
+
+      // --- lo que hay que advertir sin que se pregunte -----------------
+      var ojo = [];
+
+      if (!f.hayPlan) {
+        ojo.push('La hoja <b>' + esc(DATA.plan.hoja) + '</b> no tiene filas ' +
+          'válidas: se puede ver lo que entró, pero no contra qué.');
+      } else if (!f.mesEnPlan) {
+        ojo.push('El <b>' + esc(DATA.plan.hoja) + '</b> no tiene columna para ' +
+          esc(mes.etiqueta) + ', así que no hay plan del mes con que comparar.');
+      }
+
+      if (!f.homologacion.existe) {
+        ojo.push('No existe la hoja <b>' + esc(f.homologacion.hoja) +
+          '</b>: sin ella los nombres cortos de la planilla no cruzan con SAP.');
+      }
+
+      if ((f.sinHomologar || []).length) {
+        var camiones = f.sinHomologar.reduce(function (t, x) { return t + x.camiones; }, 0);
+
+        ojo.push('<b>' + entero(camiones) + ' camiones</b> del mes están a ' +
+          'nombre de ' + f.sinHomologar.length + ' proveedor(es) que no cruzan ' +
+          'con SAP (' + esc(f.sinHomologar.slice(0, 4).map(function (x) {
+            return x.proveedor;
+          }).join(', ')) + (f.sinHomologar.length > 4 ? '…' : '') +
+          '): suman cero TS. Se asignan en <b>Homologación</b>.');
+      }
+
+      if ((f.sinCruce || []).length) {
+        var sc = f.sinCruce.reduce(function (t, x) { return t + x.camiones; }, 0);
+
+        ojo.push('<b>' + entero(sc) + ' camión(es)</b> cayeron en días que SAP ' +
+          'ya cubre pero su guía no cruzó: no se estiman —sería contar dos veces ' +
+          'la misma carga— y lo que hay que revisar es el Nº de guía.');
+      }
+
+      if ((f.sinPlan || []).length) {
+        ojo.push('<b>' + f.sinPlan.length + ' proveedor(es)</b> despacharon sin ' +
+          'estar en el Plan del mes: ' + esc(f.sinPlan.slice(0, 4).map(function (x) {
+            return x.proveedor;
+          }).join(', ')) + (f.sinPlan.length > 4 ? '…' : '') +
+          '. Su volumen no se valoriza ni se compara.');
+      }
+
+      if ((f.duplicados || []).length) {
+        ojo.push('<b>' + f.duplicados.length + '</b> guía(s) repetida(s) en la ' +
+          'planilla del mes para el mismo proveedor: se cuentan una sola vez.');
+      }
+
+      var caja = document.getElementById('avisoOjo');
+
+      caja.innerHTML = ojo.join(' ');
+      caja.classList.toggle('se-ve', ojo.length > 0);
+    }
+
+    /** Los productos, sin el sufijo con que SAP los escribe. */
+    function productosUnicos() {
+      var vistos = {};
+
+      (DATA.filtros.productos || []).forEach(function (p) {
+        vistos[producto(p)] = true;
+      });
+
+      return Object.keys(vistos).sort();
+    }
+
+    /** 'ASTILLA VERDE (TS)' y 'ASTILLA VERDE' son el mismo producto. */
+    function producto(nombre) {
+      return String(nombre || '').replace(/\s*\((TS|MR|M3)\)\s*$/i, '').trim();
+    }
+
+    function llenarSelect(id, valores, primera) {
+      var select = document.getElementById(id);
+      var previo = select.value;
+
+      select.innerHTML = '<option value="">' + esc(primera) + '</option>' +
+        (valores || []).map(function (v) {
+          return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+        }).join('');
+
+      if (Array.prototype.some.call(select.options, function (o) {
+        return o.value === previo;
+      })) {
+        select.value = previo;
+      }
+    }
+
+    /* =================================================================
+       FILTROS Y PERÍODO
+       ================================================================= */
+
+    function limpiarFiltros() {
+      document.getElementById('desde').value = DATA.mes.startKey;
+      document.getElementById('hasta').value = DATA.mes.endKey;
+      ['fProducto', 'fProveedor', 'fFuente', 'fSituacion'].forEach(function (id) {
+        var nodo = document.getElementById(id);
+        if (nodo) nodo.value = '';
+      });
+      document.getElementById('fBuscar').value = '';
+      document.getElementById('bProv').value = '';
+      render();
+    }
+
+    function rangoDe(cual) {
+      var mes = DATA.mes;
+
+      if (cual === 'trimestre') {
+        var m = mes.mes - 2;
+        var a = mes.anio;
+
+        while (m < 1) { m += 12; a--; }
+
+        return [a + '-' + dos(m) + '-01', mes.endKey];
+      }
+
+      if (cual === 'historia') {
+        return [DATA.fuente.historiaDesde + '-01', mes.endKey];
+      }
+
+      return [mes.startKey, mes.endKey];
+    }
+
+    function montarRangos() {
+      var caja = document.querySelector('.rangos');
+
+      caja.addEventListener('click', function (ev) {
+        var boton = ev.target.closest('.pastilla');
+
+        if (!boton) return;
+
+        var r = rangoDe(boton.getAttribute('data-rango'));
+
+        document.getElementById('desde').value = r[0];
+        document.getElementById('hasta').value = r[1];
+        render();
+      });
+    }
+
+    function marcarRango() {
+      var desde = document.getElementById('desde').value;
+      var hasta = document.getElementById('hasta').value;
+
+      Array.prototype.forEach.call(
+        document.querySelectorAll('.rangos .pastilla'),
+        function (b) {
+          var r = rangoDe(b.getAttribute('data-rango'));
+          b.classList.toggle('activa', r[0] === desde && r[1] === hasta);
+        }
+      );
+    }
+
+    function filtrar() {
+      var desde = document.getElementById('desde').value;
+      var hasta = document.getElementById('hasta').value;
+      var prod = document.getElementById('fProducto').value;
+      var prov = document.getElementById('fProveedor').value;
+      var fuente = document.getElementById('fFuente').value;
+      var buscar = normalizar(document.getElementById('fBuscar').value);
+
+      return (DATA.filas || []).filter(function (f) {
+        if (f.duplicado) return false;
+        if (desde && f.fecha && f.fecha < desde) return false;
+        if (hasta && f.fecha && f.fecha > hasta) return false;
+        if (!f.fecha) return false;
+        if (prod && producto(f.producto) !== prod) return false;
+        if (prov && f.proveedor !== prov) return false;
+        if (fuente && f.fuente !== fuente) return false;
+
+        if (buscar) {
+          var pajar = normalizar([f.proveedor, f.proveedorPlanilla, f.proveedorSap,
+            f.producto, f.comuna, f.guia, f.patente, f.ticket, f.estado,
+            f.documento].join(' '));
+
+          if (pajar.indexOf(buscar) === -1) return false;
+        }
+
+        return true;
+      });
+    }
+
+    /** El contexto del período: días hábiles y si el plan es comparable. */
+    function periodo() {
+      var desde = document.getElementById('desde').value || DATA.mes.startKey;
+      var hasta = document.getElementById('hasta').value || DATA.mes.endKey;
+      var mes = DATA.mes;
+      var ref = DATA.habiles.referencia;
+
+      var seleccionados = (DATA.habiles.claves || []).filter(function (k) {
+        return k >= desde && k <= hasta;
+      });
+
+      var transcurridos = seleccionados.filter(function (k) {
+        return !ref || k <= ref;
+      });
+
+      var enElMes = desde >= mes.startKey && hasta <= mes.endKey && desde <= hasta;
+
+      return {
+        desde: desde,
+        hasta: hasta,
+        enElMes: enElMes,
+        // El plan es del mes y por proveedor: comparar contra un rango que
+        // cruza meses, o contra una sola fuente, sería compararlo con otra
+        // cosa y llamarla cumplimiento.
+        planComparable: enElMes && DATA.fuente.hayPlan && DATA.fuente.mesEnPlan &&
+          !document.getElementById('fFuente').value &&
+          !normalizar(document.getElementById('fBuscar').value),
+        habilesDelMes: DATA.habiles.total,
+        seleccionados: seleccionados.length,
+        transcurridos: transcurridos.length,
+        restantes: Math.max(0, seleccionados.length - transcurridos.length),
+        claves: seleccionados,
+        referencia: ref
+      };
+    }
+
+    function porQueNoHayPlan() {
+      if (!DATA.fuente.hayPlan) return 'Sin filas válidas en la hoja Plan';
+      if (!DATA.fuente.mesEnPlan) return 'El Plan no tiene columna para este mes';
+      if (document.getElementById('fFuente').value) {
+        return 'El plan no es comparable con una sola fuente';
+      }
+      if (normalizar(document.getElementById('fBuscar').value)) {
+        return 'El plan no es comparable con una búsqueda activa';
+      }
+      return 'El plan se compara dentro del mes vigente';
+    }
+
+    /** Plan del mes para los filtros puestos. */
+    function planDelMes() {
+      var prod = document.getElementById('fProducto').value;
+      var prov = document.getElementById('fProveedor').value;
+
+      return (DATA.plan.filas || []).reduce(function (total, fila) {
+        if (prov && fila.proveedor !== prov) return total;
+        if (prod && producto(fila.producto) && producto(fila.producto) !== prod) {
+          return total;
+        }
+        return total + (Number((fila.cantidades || {})[DATA.mes.prefijo]) || 0);
+      }, 0);
+    }
+
+    /* =================================================================
+       CICLO DE PINTADO
+       ================================================================= */
+
+    function render() {
+      if (!DATA) return;
+
+      FILAS = filtrar();
+      PROVEEDORES = porProveedor(FILAS);
+      METRICAS = metricas(FILAS);
+
+      dibujarPortada();
+      dibujarRegla();
+      dibujarLectura();
+      dibujarAlertas();
+      dibujarConfianza();
+      dibujarTablaProveedores();
+      dibujarTablaDetalle();
+      dibujarGraficos();
+      marcarRango();
+      observarPaneles();
+    }
+
+    function metricas(filas) {
+      var p = periodo();
+      var real = 0;
+      var estimada = 0;
+      var camiones = 0;
+      var enSap = 0;
+      var pendientes = 0;
+      var soloSap = 0;
+      var sinCruce = 0;
+      var sinHomologar = 0;
+      var costo = 0;
+      var tsConPrecio = 0;
+
+      filas.forEach(function (f) {
+        if (f.fuente === 'SAP') real += f.ts;
+        else if (f.fuente === 'ESTIMADO') estimada += f.ts;
+
+        if (f.estado === 'SOLO SAP') { soloSap++; }
+        else {
+          camiones++;
+          if (f.estado === 'EN SAP') enSap++;
+          else if (f.fuente === 'ESTIMADO') pendientes++;
+          else if (String(f.estado).indexOf('SIN CRUCE') === 0) sinCruce++;
+          else if (f.estado === 'SIN HOMOLOGAR') sinHomologar++;
+        }
+
+        if (f.precio !== null && f.precio !== undefined) {
+          tsConPrecio += f.ts;
+          costo += f.ts * f.precio;
+        }
+      });
+
+      var total = real + estimada;
+      var planMes = planDelMes();
+      var habilesMes = p.habilesDelMes || 0;
+
+      var planPeriodo = p.planComparable && habilesMes
+        ? planMes * p.seleccionados / habilesMes : 0;
+      var planFecha = p.planComparable && habilesMes
+        ? planMes * p.transcurridos / habilesMes : 0;
+
+      var ritmo = p.transcurridos > 0 ? total / p.transcurridos : 0;
+      var proyeccion = p.seleccionados > 0 ? ritmo * p.seleccionados : total;
+
+      var top3 = PROVEEDORES.slice(0, 3).reduce(function (t, x) { return t + x.parte; }, 0);
+      var top5 = PROVEEDORES.slice(0, 5).reduce(function (t, x) { return t + x.parte; }, 0);
+
+      return {
+        periodo: p,
+        real: real,
+        estimada: estimada,
+        total: total,
+        camiones: camiones,
+        enSap: enSap,
+        pendientes: pendientes,
+        soloSap: soloSap,
+        sinCruce: sinCruce,
+        sinHomologar: sinHomologar,
+        planMes: planMes,
+        planPeriodo: planPeriodo,
+        planFecha: planFecha,
+        desvio: p.planComparable ? total - planFecha : null,
+        cumplimiento: p.planComparable && planFecha > 0 ? total / planFecha : null,
+        ritmo: ritmo,
+        proyeccion: proyeccion,
+        requerido: p.planComparable && p.restantes > 0
+          ? Math.max(0, planPeriodo - total) / p.restantes : null,
+        parteReal: total > 0 ? real / total : 1,
+        parteEstimada: total > 0 ? estimada / total : 0,
+        costo: costo,
+        precio: tsConPrecio > 0 ? costo / tsConPrecio : null,
+        coberturaPrecio: total > 0 ? tsConPrecio / total : 0,
+        tsSinPrecio: Math.max(0, total - tsConPrecio),
+        top3: top3,
+        top5: top5,
+        proveedores: PROVEEDORES.length
+      };
+    }
+
+    /** Un cubo por proveedor, con su plan, su factor y su corte de SAP. */
+    function porProveedor(filas) {
+      var p = periodo();
+      var cubos = {};
+      var cortes = {};
+
+      (DATA.fuente.cortes || []).forEach(function (c) {
+        cortes[clave(c.proveedor)] = c.corte;
+      });
+
+      function cubo(nombre) {
+        if (!cubos[nombre]) {
+          cubos[nombre] = {
+            proveedor: nombre, proveedorSap: '', camiones: 0, enSap: 0,
+            pendientes: 0, sinCruce: 0, sinHomologar: 0, soloSap: 0,
+            tsReal: 0, tsEstimada: 0, total: 0, costo: 0, tsConPrecio: 0,
+            factor: 0, precio: null, planMes: 0, dias: {}, productos: {},
+            ultimo: '', sinPlan: false, corte: ''
+          };
+        }
+
+        return cubos[nombre];
+      }
+
+      filas.forEach(function (f) {
+        var x = cubo(f.proveedor);
+
+        if (!x.proveedorSap && f.proveedorSap) x.proveedorSap = f.proveedorSap;
+        if (f.sinPlan) x.sinPlan = true;
+
+        if (f.estado === 'SOLO SAP') x.soloSap++;
+        else {
+          x.camiones++;
+          if (f.estado === 'EN SAP') x.enSap++;
+          else if (f.fuente === 'ESTIMADO') x.pendientes++;
+          else if (String(f.estado).indexOf('SIN CRUCE') === 0) x.sinCruce++;
+          else if (f.estado === 'SIN HOMOLOGAR') x.sinHomologar++;
+        }
+
+        if (f.fuente === 'SAP') x.tsReal += f.ts;
+        else if (f.fuente === 'ESTIMADO') x.tsEstimada += f.ts;
+
+        x.total = x.tsReal + x.tsEstimada;
+
+        if (f.promedioUsado > 0) x.factor = f.promedioUsado;
+        if (f.precio !== null && f.precio !== undefined) {
+          x.precio = f.precio;
+          x.tsConPrecio += f.ts;
+          x.costo += f.ts * f.precio;
+        }
+
+        if (f.fecha) {
+          x.dias[f.fecha] = (x.dias[f.fecha] || 0) + f.ts;
+          if (f.fecha > x.ultimo) x.ultimo = f.fecha;
+        }
+
+        if (f.producto) x.productos[producto(f.producto)] = true;
+      });
+
+      // Un proveedor con plan y sin ingresos también es noticia.
+      (DATA.plan.filas || []).forEach(function (fila) {
+        var cantidad = Number((fila.cantidades || {})[DATA.mes.prefijo]) || 0;
+        var prod = document.getElementById('fProducto').value;
+        var prov = document.getElementById('fProveedor').value;
+
+        if (prov && fila.proveedor !== prov) return;
+        if (prod && producto(fila.producto) && producto(fila.producto) !== prod) return;
+        if (!cantidad && !cubos[fila.proveedor]) return;
+
+        var x = cubo(fila.proveedor);
+
+        x.planMes += cantidad;
+        if (fila.precio !== null && fila.precio !== undefined && x.precio === null) {
+          x.precio = fila.precio;
+        }
+      });
+
+      var granTotal = Object.keys(cubos).reduce(function (t, k) {
+        return t + cubos[k].total;
+      }, 0);
+
+      var habilesMes = p.habilesDelMes || 0;
+
+      var lista = Object.keys(cubos).map(function (k) {
+        var x = cubos[k];
+
+        x.parte = granTotal > 0 ? x.total / granTotal : 0;
+        x.planFecha = p.planComparable && habilesMes
+          ? x.planMes * p.transcurridos / habilesMes : 0;
+        x.brecha = p.planComparable && x.planMes > 0 ? x.total - x.planFecha : null;
+        x.cumplimiento = p.planComparable && x.planFecha > 0
+          ? x.total / x.planFecha : null;
+        x.corte = cortes[clave(x.proveedorSap)] || '';
+        x.diasConIngreso = Object.keys(x.dias).length;
+        x.listaProductos = Object.keys(x.productos).sort();
+
+        return x;
+      }).filter(function (x) {
+        return x.total > 0 || x.camiones > 0 || x.planMes > 0;
+      }).sort(function (a, b) { return b.total - a.total; });
+
+      var acumulado = 0;
+
+      lista.forEach(function (x, i) {
+        acumulado += x.parte;
+        x.acumulado = acumulado;
+        x.puesto = i + 1;
+      });
+
+      return lista;
+    }
+
+    /* =================================================================
+       PORTADA, REGLA Y LECTURA
+       ================================================================= */
+
+    function dibujarPortada() {
+      var m = METRICAS;
+
+      var celdas = [
+        {
+          tag: 'TS proyectadas del período', val: cant(m.total), uni: DATA.unidad,
+          pie: entero(m.camiones) + ' camiones en la planilla' +
+            (m.soloSap ? ' · ' + entero(m.soloSap) + ' cargas sólo en SAP' : '')
+        },
+        {
+          tag: 'Avance contra el plan a la fecha',
+          val: m.cumplimiento === null ? '—' : pct(m.cumplimiento),
+          clase: m.cumplimiento === null ? ''
+            : (m.cumplimiento < 1 ? 'val-riesgo' : 'val-verde'),
+          pie: m.cumplimiento === null ? porQueNoHayPlan()
+            : 'Plan a la fecha ' + cant(m.planFecha) + ' ' + DATA.unidad
+        },
+        {
+          tag: 'Monto proyectado',
+          val: m.costo ? corto(m.costo) : '—',
+          pie: m.precio === null ? 'Sin precio homologado'
+            : 'Precio medio ' + precio(m.precio) + ' por ' + DATA.unidad
+        }
+      ];
+
+      document.getElementById('portadaCifras').innerHTML = celdas.map(function (c) {
+        return '<div class="portada-cifra">' +
+          '<div class="portada-tag">' + esc(c.tag) + '</div>' +
+          '<div class="portada-val ' + (c.clase || '') + '">' + esc(c.val) +
+          (c.uni ? '<small>' + esc(c.uni) + '</small>' : '') + '</div>' +
+          '<div class="portada-pie">' + esc(c.pie) + '</div></div>';
+      }).join('');
+    }
+
+    /**
+     * La regla del mes.
+     *
+     * En el rubro todo se mide: forcípula, romana, cinta diamétrica. El mes se
+     * dibuja como un instrumento: la escala es el plan, lo llenado es lo que
+     * entró, y las marcas dicen dónde deberíamos ir hoy y dónde vamos a
+     * terminar.
+     */
+    function dibujarRegla() {
+      var m = METRICAS;
+      var p = m.periodo;
+
+      document.getElementById('reglaTitulo').textContent =
+        p.desde === DATA.mes.startKey && p.hasta === DATA.mes.endKey
+          ? 'La regla del mes' : 'La regla del período';
+
+      var tope = Math.max(m.planPeriodo, m.total, m.proyeccion, 1) * 1.02;
+
+
+      function porcentaje(v) {
+        return Math.max(0, Math.min(100, (v / tope) * 100));
+      }
+
+      var anchoReal = porcentaje(m.real);
+
+      document.getElementById('reglaReal').style.width = anchoReal + '%';
+      document.getElementById('reglaEst').style.left = anchoReal + '%';
+      document.getElementById('reglaEst').style.width = porcentaje(m.estimada) + '%';
+
+      var marca = document.getElementById('reglaMarca');
+      var proy = document.getElementById('reglaProy');
+
+      if (m.planFecha > 0) {
+        var pos = porcentaje(m.planFecha);
+
+        marca.hidden = false;
+        marca.style.left = pos + '%';
+        marca.setAttribute('data-rotulo', 'plan a la fecha ' + cant(m.planFecha));
+        marca.setAttribute('data-lado', pos > 62 ? 'izq' : 'der');
+      } else {
+        marca.hidden = true;
+      }
+
+      if (m.proyeccion > 0) {
+        var posP = porcentaje(m.proyeccion);
+
+        proy.hidden = false;
+        proy.style.left = posP + '%';
+        proy.setAttribute('data-rotulo', 'cierre ' + cant(m.proyeccion));
+        proy.setAttribute('data-lado', posP > 62 ? 'izq' : 'der');
+      } else {
+        proy.hidden = true;
+      }
+
+      var escala = [];
+
+      for (var i = 0; i <= 4; i++) {
+        escala.push('<span class="regla-tick" style="left:' + (i * 25) + '%">' +
+          corto(tope * i / 4) + '</span>');
+      }
+
+      document.getElementById('reglaEscala').innerHTML = escala.join('');
+    }
+
+    function dibujarLectura() {
+      var m = METRICAS;
+      var p = m.periodo;
+      var sinPlan = porQueNoHayPlan();
+
+      var celdas = [
+        {
+          tag: 'Ingreso real cruzado', val: cant(m.real), uni: DATA.unidad,
+          clase: 'val-verde',
+          pie: entero(m.enSap) + ' camiones con guía en SAP' +
+            (m.soloSap ? ' + ' + entero(m.soloSap) + ' sólo SAP' : '')
+        },
+        {
+          tag: 'Estimado por promedio', val: cant(m.estimada), uni: DATA.unidad,
+          clase: 'val-madera',
+          pie: entero(m.pendientes) + ' camiones que SAP todavía no procesa'
+        },
+        {
+          tag: 'Plan del período',
+          val: p.planComparable ? cant(m.planPeriodo) : '—',
+          uni: p.planComparable ? DATA.unidad : '',
+          pie: p.planComparable
+            ? p.transcurridos + ' de ' + p.seleccionados + ' días hábiles corridos'
+            : sinPlan
+        },
+        {
+          tag: 'Desvío a la fecha',
+          val: m.desvio === null ? '—' : signo(m.desvio),
+          uni: m.desvio === null ? '' : DATA.unidad,
+          clase: m.desvio === null ? '' : (m.desvio < 0 ? 'val-riesgo' : 'val-verde'),
+          pie: m.desvio === null ? sinPlan
+            : (m.desvio >= 0 ? 'Sobre el ritmo del plan' : 'Bajo el ritmo del plan')
+        },
+        {
+          tag: 'Cierre al ritmo actual', val: cant(m.proyeccion), uni: DATA.unidad,
+          clase: p.planComparable && m.proyeccion < m.planPeriodo ? 'val-riesgo' : '',
+          pie: p.planComparable
+            ? pct(m.proyeccion / m.planPeriodo) + ' del plan del período'
+            : 'Al ritmo observado'
+        },
+        {
+          tag: 'Ritmo actual', val: cant(m.ritmo), uni: DATA.unidad + '/día hábil',
+          pie: m.requerido === null ? 'Sin días hábiles por delante'
+            : 'Se requieren ' + cant(m.requerido) + ' para llegar al plan'
+        },
+        {
+          tag: 'Camiones sin cruce', val: entero(m.sinCruce + m.sinHomologar),
+          clase: (m.sinCruce + m.sinHomologar) ? 'val-riesgo' : 'val-verde',
+          pie: m.sinHomologar
+            ? entero(m.sinHomologar) + ' sin homologar · ' + entero(m.sinCruce) +
+              ' en días que SAP ya cubre'
+            : (m.sinCruce ? 'En días que SAP ya cubre: revisar la guía'
+                          : 'Todos los camiones cruzan o se estiman')
+        },
+        {
+          tag: 'Cobertura de precio', val: pct(m.coberturaPrecio),
+          clase: m.coberturaPrecio < 0.95 ? 'val-riesgo' : 'val-verde',
+          pie: cant(m.tsSinPrecio) + ' ' + DATA.unidad + ' sin precio en el Plan'
+        }
+      ];
+
+      document.getElementById('lectura').innerHTML = celdas.map(function (c) {
+        return '<div class="cifra">' +
+          '<div class="cifra-tag">' + esc(c.tag) + '</div>' +
+          '<div class="cifra-val ' + (c.clase || '') + '">' + esc(c.val) +
+          (c.uni ? '<small>' + esc(c.uni) + '</small>' : '') + '</div>' +
+          '<div class="cifra-pie">' + esc(c.pie) + '</div></div>';
+      }).join('');
+    }
+
+    function dibujarAlertas() {
+      var m = METRICAS;
+      var lista = [];
+
+      if (m.desvio !== null && m.desvio < 0) {
+        lista.push({ nivel: 'mal', texto: 'El avance va por debajo del plan a la fecha.',
+          valor: signo(m.desvio) + ' ' + DATA.unidad });
+      } else if (m.desvio !== null) {
+        lista.push({ nivel: 'bien', texto: 'El avance va sobre el ritmo que exige el plan.',
+          valor: signo(m.desvio) + ' ' + DATA.unidad });
+      }
+
+      if (m.periodo.planComparable && m.proyeccion < m.planPeriodo) {
+        lista.push({ nivel: 'mal', texto: 'Al ritmo actual el período cierra bajo el plan.',
+          valor: pct(m.proyeccion / m.planPeriodo) });
+      }
+
+      if (m.requerido !== null && m.requerido > m.ritmo * 1.15) {
+        lista.push({ nivel: 'ojo', texto: 'El ritmo requerido supera al actual: hay que acelerar.',
+          valor: cant(m.requerido) + ' vs ' + cant(m.ritmo) });
+      }
+
+      if (m.parteEstimada > 0.35) {
+        lista.push({ nivel: 'ojo',
+          texto: 'Buena parte del avance es estimado: SAP todavía no lo confirma.',
+          valor: pct(m.parteEstimada) });
+      }
+
+      if (m.sinHomologar) {
+        lista.push({ nivel: 'mal',
+          texto: 'Hay camiones cuyo proveedor no cruza: suman cero TS.',
+          valor: entero(m.sinHomologar) + ' camiones' });
+      }
+
+      if (m.sinCruce) {
+        lista.push({ nivel: 'ojo',
+          texto: 'Camiones sin cruce en días que SAP ya cubre: revisar el Nº de guía.',
+          valor: entero(m.sinCruce) + ' camiones' });
+      }
+
+      if (m.coberturaPrecio < 0.95) {
+        lista.push({ nivel: 'ojo', texto: 'Hay TS sin precio en el Plan: quedan fuera del monto.',
+          valor: cant(m.tsSinPrecio) + ' ' + DATA.unidad });
+      }
+
+      if (m.top5 > 0.8 && m.proveedores > 1) {
+        lista.push({ nivel: 'ojo', texto: 'El suministro depende de muy pocos proveedores.',
+          valor: 'Top 5: ' + pct(m.top5) });
+      }
+
+      var fueraDeRango = (DATA.promedios || []).filter(function (x) {
+        return x.fueraDeRango;
+      });
+
+      if (fueraDeRango.length) {
+        lista.push({ nivel: 'ojo',
+          texto: 'Hay promedios TS/carga fuera del rango esperado: revisar el export SAP.',
+          valor: fueraDeRango.length + ' proveedor(es)' });
+      }
+
+      if (!lista.length) {
+        lista.push({ nivel: 'bien',
+          texto: 'Sin desviaciones que requieran atención en este período.', valor: '' });
+      }
+
+      document.getElementById('alertas').innerHTML = lista.map(function (a) {
+        return '<div class="alerta" data-nivel="' + a.nivel + '"><i></i><span>' +
+          esc(a.texto) + '</span><b>' + esc(a.valor) + '</b></div>';
+      }).join('');
+    }
+
+    function dibujarConfianza() {
+      var m = METRICAS;
+      var top = PROVEEDORES[0];
+
+      document.getElementById('confianza').innerHTML =
+        '<div class="medida"><span>Ingreso cruzado con SAP</span><b>' +
+          cant(m.real) + ' ' + DATA.unidad + '</b></div>' +
+        '<div class="liston"><i style="width:' +
+          (m.parteReal * 100).toFixed(1) + '%"></i></div>' +
+        '<div class="medida"><span>Estimado por promedio TS/carga</span><b>' +
+          cant(m.estimada) + ' ' + DATA.unidad + '</b></div>' +
+        '<div class="medida"><span>SAP cubre hasta</span><b>' +
+          esc(fecha(DATA.fuente.corteGlobal) || '—') + '</b></div>' +
+        '<div class="medida"><span>Planilla cargada hasta</span><b>' +
+          esc(fecha(DATA.habiles.ultimaPlanilla) || '—') + '</b></div>' +
+        '<div class="medida"><span>Proveedor N.º 1</span><b>' +
+          (top ? esc(corta(top.proveedor)) + ' · ' + pct(top.parte) : '—') + '</b></div>' +
+        '<div class="medida"><span>Top 3 / Top 5</span><b>' +
+          pct(m.top3) + ' / ' + pct(m.top5) + '</b></div>' +
+        '<div class="medida"><span>Proveedores activos</span><b>' +
+          entero(m.proveedores) + '</b></div>';
+    }
+  </script>
+
+  <script>
+    /* =================================================================
+       GLOBO DE DETALLE
+
+       Reemplaza a los <title> de SVG, que tardan casi un segundo en salir,
+       no se pueden dar formato y no sirven en una línea sin puntos que
+       apuntar. Acá el dato aparece al instante y trae el contexto: no sólo
+       cuánto entró, también cuánto tocaba.
+       ================================================================= */
+
+    var GLOBO = null;
+
+    window.addEventListener('scroll', function () {
+      if (!GLOBO || !GLOBO.classList.contains('viendo')) return;
+      APAGADORES.forEach(function (fn) { fn(); });
+    }, { passive: true });
+
+    function globoHTML(cfg) {
+      var html = '';
+
+      if (cfg.titulo) {
+        html += '<div class="globo-titulo">' + esc(cfg.titulo) +
+          (cfg.subtitulo ? '<span class="globo-sub">' + esc(cfg.subtitulo) +
+            '</span>' : '') + '</div>';
+      }
+
+      var filas = (cfg.filas || []).filter(Boolean);
+
+      if (filas.length) {
+        html += '<div class="globo-filas">' + filas.map(function (f) {
+          return (f.color ? '<i style="background:' + f.color + '"></i>' : '<i></i>') +
+            '<span' + (f.tenue ? ' class="tenue"' : '') + '>' + esc(f.etiqueta) +
+            '</span><b class="' + (f.clase || '') + '">' + esc(f.valor) + '</b>';
+        }).join('') + '</div>';
+      }
+
+      if (cfg.pie) html += '<div class="globo-pie">' + esc(cfg.pie) + '</div>';
+
+      return html;
+    }
+
+    function moverGlobo(ev) {
+      if (!GLOBO || !GLOBO.classList.contains('viendo')) return;
+
+      var caja = GLOBO.getBoundingClientRect();
+      var margen = 14;
+      var x = ev.clientX + margen;
+      var y = ev.clientY + margen;
+
+      // Cerca del borde se pasa al otro lado del cursor en vez de salirse de
+      // la pantalla o empujar la página.
+      if (x + caja.width > window.innerWidth - 8) x = ev.clientX - caja.width - margen;
+      if (y + caja.height > window.innerHeight - 8) y = ev.clientY - caja.height - margen;
+
+      GLOBO.style.transform = 'translate3d(' + Math.max(8, Math.round(x)) + 'px,' +
+        Math.max(8, Math.round(y)) + 'px,0)';
+    }
+
+    function montarGlobo(caja, cfg) {
+      var activo = -1;
+
+      if (!GLOBO) GLOBO = document.getElementById('globo');
+
+      function entrar(ev) {
+        var banda = ev.target.closest ? ev.target.closest('.banda') : null;
+
+        if (!banda) { if (activo !== -1) salir(); return; }
+
+        var i = Number(banda.getAttribute('data-i'));
+
+        if (i !== activo) {
+          activo = i;
+
+          var html = cfg.contenido(i);
+
+          if (!html) { salir(); return; }
+
+          GLOBO.innerHTML = html;
+          GLOBO.classList.add('viendo');
+          GLOBO.setAttribute('aria-hidden', 'false');
+          moverGlobo(ev);
+
+          if (cfg.destacar) cfg.destacar(i);
+        } else {
+          moverGlobo(ev);
+        }
+      }
+
+      function salir() {
+        if (activo === -1) return;
+
+        activo = -1;
+        GLOBO.classList.remove('viendo');
+        GLOBO.setAttribute('aria-hidden', 'true');
+
+        if (cfg.apagar) cfg.apagar();
+      }
+
+      caja.addEventListener('pointermove', entrar);
+      caja.addEventListener('pointerdown', entrar);
+      caja.addEventListener('pointerleave', salir);
+      caja.addEventListener('pointercancel', salir);
+
+      APAGADORES.push(salir);
+    }
+
+    /** Bandas de captura de alto completo, una por dato. */
+    function bandas(n, M, w, h, paso) {
+      var partes = [];
+      var ancho = paso || (w / n);
+
+      for (var i = 0; i < n; i++) {
+        var x = M.l + ancho * i;
+
+        partes.push('<g class="banda-g" data-g="' + i + '">' +
+          '<rect class="banda-fondo" x="' + x + '" y="' + M.t + '" width="' + ancho +
+          '" height="' + h + '"/><rect class="banda" data-i="' + i + '" x="' + x +
+          '" y="' + M.t + '" width="' + ancho + '" height="' + h + '"/></g>');
+      }
+
+      return partes.join('');
+    }
+
+    function encender(caja, i) {
+      var svg = caja.querySelector('.grafico');
+
+      if (svg) svg.classList.add('enfocando');
+
+      Array.prototype.forEach.call(caja.querySelectorAll('.banda-g'), function (g) {
+        g.classList.toggle('banda-viva', Number(g.getAttribute('data-g')) === i);
+      });
+
+      Array.prototype.forEach.call(caja.querySelectorAll('.barra-svg'), function (b) {
+        b.classList.toggle('viva', Number(b.getAttribute('data-i')) === i);
+      });
+    }
+
+    function apagar(caja) {
+      var svg = caja.querySelector('.grafico');
+
+      if (svg) svg.classList.remove('enfocando');
+
+      Array.prototype.forEach.call(caja.querySelectorAll('.banda-viva'), function (g) {
+        g.classList.remove('banda-viva');
+      });
+
+      Array.prototype.forEach.call(caja.querySelectorAll('.barra-svg.viva'), function (b) {
+        b.classList.remove('viva');
+      });
+
+      var guia = caja.querySelector('.guia');
+      var foco = caja.querySelector('.foco');
+
+      if (guia) guia.setAttribute('opacity', '0');
+      if (foco) foco.setAttribute('opacity', '0');
+    }
+
+    /* =================================================================
+       GRÁFICOS
+       ================================================================= */
+
+    function dibujarGraficos() {
+      if (!METRICAS) return;
+
+      if (GLOBO) GLOBO.classList.remove('viendo');
+      APAGADORES.length = 0;
+
+      grafAcumulado();
+      grafDiario();
+      grafMix();
+      grafPareto();
+    }
+
+    /**
+     * El formato de toda una serie, elegido por su techo. Mezclar "874" con
+     * "1k" en el mismo gráfico obliga a convertir de cabeza para comparar dos
+     * barras vecinas.
+     */
+    function formatoSerie(tope) {
+      return Math.abs(Number(tope) || 0) >= 10000 ? corto : entero;
+    }
+
+    function ejeY(M, w, h, tope) {
+      var partes = [];
+      var como = formatoSerie(tope);
+
+      for (var g = 0; g <= 4; g++) {
+        var y = M.t + (g / 4) * h;
+
+        partes.push('<line class="rejilla" x1="' + M.l + '" y1="' + y + '" x2="' +
+          (M.l + w) + '" y2="' + y + '"/>');
+        partes.push('<text x="' + (M.l - 8) + '" y="' + (y + 3.5) +
+          '" text-anchor="end" font-size="10">' + como(tope * (1 - g / 4)) + '</text>');
+      }
+
+      return partes.join('');
+    }
+
+    function rotulo(cx, cy, texto, clase, anclaje) {
+      return '<text class="rotulo' + (clase ? ' ' + clase : '') + '" x="' +
+        Number(cx).toFixed(1) + '" y="' + Number(cy).toFixed(1) + '" text-anchor="' +
+        (anclaje || 'middle') + '">' + esc(texto) + '</text>';
+    }
+
+    /** Ancho aproximado de un texto en el mono del panel. */
+    function cabenRotulos(textos, paso) {
+      var mayor = 0;
+
+      textos.forEach(function (t) { mayor = Math.max(mayor, String(t).length * 6); });
+
+      return mayor + 6 <= paso;
+    }
+
+    function grafAcumulado() {
+      var caja = document.getElementById('grafAcum');
+      var m = METRICAS;
+      var claves = m.periodo.claves || [];
+
+      if (!claves.length) {
+        caja.innerHTML = vacio('No hay días hábiles en el rango elegido.');
+        texto('conteoAcum', '—');
+        return;
+      }
+
+      texto('conteoAcum', claves.length + ' días hábiles');
+
+      var porFecha = {};
+
+      FILAS.forEach(function (f) {
+        porFecha[f.fecha] = (porFecha[f.fecha] || 0) + f.ts;
+      });
+
+      // Lo que cae sábado, domingo o feriado se carga al día hábil anterior:
+      // para la operación ese camión se despachó en la semana del viernes, y
+      // darle columna propia sería inventar un día de trabajo.
+      var fechas = Object.keys(porFecha).sort();
+      var acumulado = [];
+      var corriendo = 0;
+      var j = 0;
+
+      claves.forEach(function (k) {
+        while (j < fechas.length && fechas[j] <= k) {
+          corriendo += porFecha[fechas[j]];
+          j++;
+        }
+        acumulado.push(corriendo);
+      });
+
+      var iRef = -1;
+
+      claves.forEach(function (k, i) {
+        if (!m.periodo.referencia || k <= m.periodo.referencia) iRef = i;
+      });
+
+      var enRef = iRef >= 0 ? acumulado[iRef] : 0;
+      var ritmo = iRef >= 0 ? enRef / (iRef + 1) : 0;
+
+      var tope = Math.max(m.planPeriodo, acumulado[acumulado.length - 1] || 0,
+        iRef >= 0 ? enRef + ritmo * (claves.length - 1 - iRef) : 0, 1);
+
+      var W = Math.max(360, caja.clientWidth || 900);
+      var H = 320;
+      var M = { t: 14, r: 14, b: 30, l: 56 };
+      var w = W - M.l - M.r;
+      var h = H - M.t - M.b;
+
+      var x = function (i) {
+        return M.l + (claves.length < 2 ? w / 2 : (i / (claves.length - 1)) * w);
+      };
+      var y = function (v) { return M.t + h - (v / tope) * h; };
+
+      var partes = [ejeY(M, w, h, tope)];
+      var planDia = m.planPeriodo > 0 ? m.planPeriodo / claves.length : 0;
+
+      if (planDia > 0) {
+        partes.push('<line class="traza-plan" x1="' + x(0) + '" y1="' + y(planDia) +
+          '" x2="' + x(claves.length - 1) + '" y2="' + y(m.planPeriodo) + '"/>');
+        partes.push(rotulo(M.l + w, y(m.planPeriodo) - 6, corto(m.planPeriodo),
+          'rotulo-pizarra', 'end'));
+      }
+
+      if (iRef >= 0 && iRef < claves.length - 1) {
+        var finProy = enRef + ritmo * (claves.length - 1 - iRef);
+
+        partes.push('<path class="traza-proy" d="M' + x(iRef) + ' ' + y(enRef) +
+          ' L' + x(claves.length - 1) + ' ' + y(finProy) + '"/>');
+        partes.push(rotulo(M.l + w, y(finProy) + 14, corto(finProy),
+          'rotulo-madera', 'end'));
+      }
+
+      if (iRef >= 0) {
+        var d = acumulado.slice(0, iRef + 1).map(function (v, i) {
+          return (i ? 'L' : 'M') + x(i) + ' ' + y(v);
+        }).join(' ');
+
+        partes.push('<path class="traza-real' + (SUAVE ? ' traza-anim' : '') +
+          '" style="--largo:' + Math.round(w * 1.5) + '" d="' + d + '"/>');
+        partes.push('<circle cx="' + x(iRef) + '" cy="' + y(enRef) +
+          '" r="4" fill="var(--verde)"/>');
+        partes.push(rotulo(x(iRef) + (iRef > claves.length * 0.8 ? -8 : 8),
+          y(enRef) - 8, corto(enRef), 'rotulo-verde',
+          iRef > claves.length * 0.8 ? 'end' : 'start'));
+      }
+
+      var salto = Math.max(1, Math.ceil(claves.length / 12));
+
+      claves.forEach(function (k, i) {
+        if (i % salto && i !== claves.length - 1) return;
+        partes.push('<text x="' + x(i) + '" y="' + (M.t + h + 17) +
+          '" text-anchor="middle" font-size="9.5">' + k.slice(8) + '</text>');
+      });
+
+      partes.push('<line class="eje" x1="' + M.l + '" y1="' + (M.t + h) + '" x2="' +
+        (M.l + w) + '" y2="' + (M.t + h) + '"/>');
+      partes.push('<line class="guia" opacity="0" y1="' + M.t + '" y2="' + (M.t + h) +
+        '" x1="0" x2="0"/>');
+      partes.push('<circle class="foco" opacity="0" r="5.5" cx="0" cy="0" ' +
+        'fill="var(--verde)"/>');
+
+      var paso = claves.length < 2 ? w : w / (claves.length - 1);
+
+      var bandasHtml = claves.map(function (k, i) {
+        var bx = claves.length < 2 ? M.l : Math.max(M.l, x(i) - paso / 2);
+        var bw = claves.length < 2 ? w : paso;
+
+        return '<g class="banda-g" data-g="' + i + '">' +
+          '<rect class="banda-fondo" x="' + bx + '" y="' + M.t + '" width="' + bw +
+          '" height="' + h + '"/><rect class="banda" data-i="' + i + '" x="' + bx +
+          '" y="' + M.t + '" width="' + bw + '" height="' + h + '"/></g>';
+      }).join('');
+
+      caja.innerHTML = '<svg class="grafico" viewBox="0 0 ' + W + ' ' + H +
+        '" height="' + H + '" role="img" aria-label="Avance acumulado">' +
+        partes.join('') + bandasHtml + '</svg>';
+
+      montarGlobo(caja, {
+        contenido: function (i) {
+          var k = claves[i];
+          var futuro = iRef >= 0 && i > iRef;
+          var proy = enRef + ritmo * (i - iRef);
+          var planAqui = planDia * (i + 1);
+          var filas = [];
+
+          if (!futuro) {
+            filas.push({ color: 'var(--verde)', etiqueta: 'Acumulado',
+              valor: ts(acumulado[i]) });
+            filas.push({ etiqueta: 'Entró ese día',
+              valor: porFecha[k] > 0 ? ts(porFecha[k]) : 'sin ingreso',
+              tenue: !porFecha[k] });
+          } else {
+            filas.push({ color: 'var(--madera)', etiqueta: 'Proyectado', valor: ts(proy) });
+          }
+
+          if (planAqui > 0) {
+            filas.push({ color: 'var(--pizarra)', etiqueta: 'Plan a la fecha',
+              valor: ts(planAqui) });
+
+            var brecha = (futuro ? proy : acumulado[i]) - planAqui;
+
+            filas.push({ etiqueta: futuro ? 'Desvío proyectado' : 'Desvío',
+              valor: signo(brecha), clase: brecha > 0.5 ? 'sube' : (brecha < -0.5 ? 'baja' : '') });
+          }
+
+          return globoHTML({
+            titulo: fecha(k),
+            subtitulo: 'Día hábil ' + (i + 1) + ' de ' + claves.length,
+            filas: filas,
+            pie: futuro
+              ? 'Proyección al ritmo de ' + corto(ritmo) + ' por día hábil.'
+              : null
+          });
+        },
+        destacar: function (i) {
+          var futuro = iRef >= 0 && i > iRef;
+          var vy = futuro ? y(enRef + ritmo * (i - iRef)) : y(acumulado[i]);
+          var guia = caja.querySelector('.guia');
+          var foco = caja.querySelector('.foco');
+
+          if (guia) {
+            guia.setAttribute('x1', x(i));
+            guia.setAttribute('x2', x(i));
+            guia.setAttribute('opacity', '1');
+          }
+
+          if (foco) {
+            foco.setAttribute('cx', x(i));
+            foco.setAttribute('cy', vy);
+            foco.setAttribute('fill', futuro ? 'var(--madera)' : 'var(--verde)');
+            foco.setAttribute('opacity', '1');
+          }
+
+          encender(caja, i);
+        },
+        apagar: function () { apagar(caja); }
+      });
+    }
+
+    function grafDiario() {
+      var caja = document.getElementById('grafDiario');
+      var m = METRICAS;
+      var agrupado = {};
+
+      FILAS.forEach(function (f) {
+        if (!agrupado[f.fecha]) {
+          agrupado[f.fecha] = { real: 0, est: 0, camiones: 0, pendientes: 0 };
+        }
+
+        if (f.fuente === 'SAP') agrupado[f.fecha].real += f.ts;
+        else if (f.fuente === 'ESTIMADO') {
+          agrupado[f.fecha].est += f.ts;
+          agrupado[f.fecha].pendientes++;
+        }
+
+        if (f.estado !== 'SOLO SAP') agrupado[f.fecha].camiones++;
+      });
+
+      var fechas = Object.keys(agrupado).sort();
+
+      if (!fechas.length) {
+        caja.innerHTML = vacio('No hay ingresos en el rango elegido.');
+        texto('conteoDiario', '—');
+        return;
+      }
+
+      texto('conteoDiario', fechas.length + ' días con ingreso');
+
+      var planDia = m.periodo.planComparable && m.periodo.seleccionados
+        ? m.planPeriodo / m.periodo.seleccionados : 0;
+
+      var tope = Math.max(planDia, Math.max.apply(null, fechas.map(function (k) {
+        return agrupado[k].real + agrupado[k].est;
+      })), 1);
+
+      var W = Math.max(360, caja.clientWidth || 900);
+      var H = 300;
+      var M = { t: 24, r: 14, b: 30, l: 56 };
+      var w = W - M.l - M.r;
+      var h = H - M.t - M.b;
+      var paso = w / fechas.length;
+      var ancho = Math.max(3, Math.min(26, paso - 4));
+      var y = function (v) { return M.t + h - (v / tope) * h; };
+
+      var partes = [ejeY(M, w, h, tope)];
+
+      partes.push('<pattern id="rayado" width="6" height="6" ' +
+        'patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">' +
+        '<rect width="6" height="6" fill="var(--madera-2)"/>' +
+        '<rect width="3" height="6" fill="var(--madera)"/></pattern>');
+
+      fechas.forEach(function (k, i) {
+        var d = agrupado[k];
+        var cx = M.l + paso * i + paso / 2;
+
+        if (d.real > 0) {
+          partes.push('<rect class="barra-svg" data-i="' + i + '" x="' +
+            (cx - ancho / 2) + '" y="' + y(d.real) + '" width="' + ancho +
+            '" height="' + Math.max(1, (d.real / tope) * h) +
+            '" fill="var(--verde)" rx="1.5"/>');
+        }
+
+        if (d.est > 0) {
+          partes.push('<rect class="barra-svg" data-i="' + i + '" x="' +
+            (cx - ancho / 2) + '" y="' + (y(d.real) - (d.est / tope) * h) +
+            '" width="' + ancho + '" height="' + Math.max(1, (d.est / tope) * h) +
+            '" fill="url(#rayado)" rx="1.5"/>');
+        }
+      });
+
+      var como = formatoSerie(tope);
+      var cifras = fechas.map(function (k) {
+        return como(agrupado[k].real + agrupado[k].est);
+      });
+
+      if (cabenRotulos(cifras, paso)) {
+        fechas.forEach(function (k, i) {
+          var d = agrupado[k];
+          var t = d.real + d.est;
+
+          if (!t) return;
+
+          partes.push(rotulo(M.l + paso * i + paso / 2, y(t) - 6, cifras[i],
+            d.est > 0 && d.real === 0 ? 'rotulo-madera' : 'rotulo-verde'));
+        });
+      }
+
+      if (planDia > 0) {
+        partes.push('<line class="traza-plan" x1="' + M.l + '" y1="' + y(planDia) +
+          '" x2="' + (M.l + w) + '" y2="' + y(planDia) + '"/>');
+        partes.push(rotulo(M.l + w, y(planDia) - 6, 'plan diario ' + como(planDia),
+          'rotulo-pizarra', 'end'));
+      }
+
+      var salto = Math.max(1, Math.ceil(fechas.length / 14));
+
+      fechas.forEach(function (k, i) {
+        if (i % salto) return;
+        partes.push('<text x="' + (M.l + paso * i + paso / 2) + '" y="' + (M.t + h + 17) +
+          '" text-anchor="middle" font-size="9.5">' + k.slice(8) + '</text>');
+      });
+
+      partes.push('<line class="eje" x1="' + M.l + '" y1="' + (M.t + h) + '" x2="' +
+        (M.l + w) + '" y2="' + (M.t + h) + '"/>');
+
+      caja.innerHTML = '<svg class="grafico" viewBox="0 0 ' + W + ' ' + H +
+        '" height="' + H + '" role="img" aria-label="Ingreso diario por fuente">' +
+        partes.join('') + bandas(fechas.length, M, w, h, paso) + '</svg>';
+
+      montarGlobo(caja, {
+        contenido: function (i) {
+          var k = fechas[i];
+          var d = agrupado[k];
+          var filas = [];
+
+          if (d.real > 0) {
+            filas.push({ color: 'var(--verde)', etiqueta: 'Cruzado con SAP',
+              valor: ts(d.real) });
+          }
+
+          if (d.est > 0) {
+            filas.push({ color: 'var(--madera)', etiqueta: 'Estimado por promedio',
+              valor: ts(d.est) });
+          }
+
+          if (d.real > 0 && d.est > 0) {
+            filas.push({ etiqueta: 'Total del día', valor: ts(d.real + d.est) });
+          }
+
+          if (planDia > 0) {
+            filas.push({ color: 'var(--pizarra)', etiqueta: 'Plan diario',
+              valor: ts(planDia) });
+
+            var desvio = d.real + d.est - planDia;
+
+            filas.push({ etiqueta: 'Desvío', valor: signo(desvio),
+              clase: desvio > 0.5 ? 'sube' : (desvio < -0.5 ? 'baja' : '') });
+          }
+
+          return globoHTML({
+            titulo: fecha(k),
+            subtitulo: entero(d.camiones) + ' camiones en la planilla',
+            filas: filas,
+            pie: d.pendientes
+              ? entero(d.pendientes) + ' camión(es) que SAP todavía no procesa'
+              : (d.real > 0 ? 'Día cerrado en SAP.' : null)
+          });
+        },
+        destacar: function (i) { encender(caja, i); },
+        apagar: function () { apagar(caja); }
+      });
+    }
+
+    function grafMix() {
+      var caja = document.getElementById('grafMix');
+      var cubos = {};
+
+      FILAS.forEach(function (f) {
+        var p = producto(f.producto) || '(sin producto)';
+
+        if (!cubos[p]) cubos[p] = { producto: p, total: 0, real: 0, est: 0, camiones: 0 };
+
+        cubos[p].total += f.ts;
+        if (f.fuente === 'SAP') cubos[p].real += f.ts;
+        else if (f.fuente === 'ESTIMADO') cubos[p].est += f.ts;
+        if (f.estado !== 'SOLO SAP') cubos[p].camiones++;
+      });
+
+      var datos = Object.keys(cubos).map(function (k) { return cubos[k]; })
+        .filter(function (x) { return x.total > 0; })
+        .sort(function (a, b) { return b.total - a.total; });
+
+      if (!datos.length) {
+        caja.innerHTML = vacio('Sin ingresos que repartir en el rango.');
+        return;
+      }
+
+      var total = datos.reduce(function (t, x) { return t + x.total; }, 0);
+
+      caja.innerHTML = '<div class="reparto">' + datos.map(function (x, i) {
+        var parte = x.total / total;
+
+        return '<div class="banda" data-i="' + i + '" style="flex:' + parte +
+          ';background:' + colorProducto(x.producto) + '">' +
+          (parte > 0.1 ? pct(parte) : '') + '</div>';
+      }).join('') + '</div><div class="reparto-leyenda">' +
+        datos.map(function (x, i) {
+          return '<div class="reparto-fila banda" data-i="' + i + '">' +
+            '<i style="background:' + colorProducto(x.producto) + '"></i>' +
+            '<span>' + esc(x.producto) + '</span><b>' + ts(x.total) + '</b></div>';
+        }).join('') + '</div>';
+
+      montarGlobo(caja, {
+        contenido: function (i) {
+          var x = datos[i];
+
+          if (!x) return '';
+
+          return globoHTML({
+            titulo: x.producto,
+            subtitulo: entero(x.camiones) + ' camiones',
+            filas: [
+              { color: colorProducto(x.producto), etiqueta: 'Volumen', valor: ts(x.total) },
+              { etiqueta: 'Del total', valor: pct(x.total / total) },
+              { color: 'var(--verde)', etiqueta: 'Cruzado con SAP', valor: ts(x.real) },
+              x.est > 0
+                ? { color: 'var(--madera)', etiqueta: 'Estimado', valor: ts(x.est) }
+                : null
+            ]
+          });
+        }
+      });
+    }
+
+    function grafPareto() {
+      var caja = document.getElementById('grafPareto');
+      var datos = PROVEEDORES.filter(function (x) { return x.total > 0; }).slice(0, 14);
+
+      if (!datos.length) {
+        caja.innerHTML = vacio('Sin proveedores con ingreso en el rango.');
+        texto('conteoPareto', '—');
+        return;
+      }
+
+      texto('conteoPareto', PROVEEDORES.length + ' proveedores · top ' + datos.length);
+
+      var tope = datos[0].total || 1;
+      var W = Math.max(360, caja.clientWidth || 520);
+      var H = 300;
+      var M = { t: 24, r: 44, b: 78, l: 56 };
+      var w = W - M.l - M.r;
+      var h = H - M.t - M.b;
+      var paso = w / datos.length;
+      var ancho = Math.max(6, Math.min(38, paso - 8));
+      var y = function (v) { return M.t + h - (v / tope) * h; };
+
+      var partes = [ejeY(M, w, h, tope)];
+      var acumulado = 0;
+      var puntos = [];
+      var como = formatoSerie(tope);
+      var cifras = datos.map(function (x) { return como(x.total); });
+      var rotular = cabenRotulos(cifras, paso);
+
+      datos.forEach(function (x, i) {
+        var cx = M.l + paso * i + paso / 2;
+
+        partes.push('<rect class="barra-svg" data-i="' + i + '" x="' + (cx - ancho / 2) +
+          '" y="' + y(x.total) + '" width="' + ancho + '" height="' +
+          Math.max(1, (x.total / tope) * h) + '" fill="var(--verde)" rx="2"/>');
+
+        if (rotular) partes.push(rotulo(cx, y(x.total) - 6, cifras[i], 'rotulo-verde'));
+
+        acumulado += x.parte;
+        puntos.push([cx, M.t + h - Math.min(1, acumulado) * h]);
+
+        partes.push('<g transform="translate(' + cx + ',' + (M.t + h + 8) +
+          ') rotate(35)"><text font-size="9" text-anchor="start">' +
+          esc(recortar(x.proveedor, 18)) + '</text></g>');
+      });
+
+      partes.push('<path class="traza-acum" d="' + puntos.map(function (pt, i) {
+        return (i ? 'L' : 'M') + pt[0] + ' ' + pt[1];
+      }).join(' ') + '"/>');
+
+      puntos.forEach(function (pt) {
+        partes.push('<circle cx="' + pt[0] + '" cy="' + pt[1] +
+          '" r="2.6" fill="var(--pizarra)"/>');
+      });
+
+      [0, 0.5, 1].forEach(function (v) {
+        partes.push('<text x="' + (M.l + w + 7) + '" y="' + (M.t + h - v * h + 3.5) +
+          '" font-size="9.5" fill="var(--pizarra)">' + pct(v) + '</text>');
+      });
+
+      partes.push('<line class="eje" x1="' + M.l + '" y1="' + (M.t + h) + '" x2="' +
+        (M.l + w) + '" y2="' + (M.t + h) + '"/>');
+
+      caja.innerHTML = '<svg class="grafico" viewBox="0 0 ' + W + ' ' + H +
+        '" height="' + H + '" role="img" aria-label="Pareto de proveedores">' +
+        partes.join('') + bandas(datos.length, M, w, h, paso) + '</svg>';
+
+      montarGlobo(caja, {
+        contenido: function (i) {
+          var x = datos[i];
+
+          if (!x) return '';
+
+          var filas = [
+            { color: 'var(--verde)', etiqueta: 'Volumen', valor: ts(x.total) },
+            { etiqueta: 'Del total', valor: pct(x.parte) },
+            { etiqueta: 'Acumulado hasta aquí', valor: pct(x.acumulado), tenue: true },
+            { etiqueta: 'Camiones', valor: entero(x.camiones) + ' (' +
+              entero(x.enSap) + ' en SAP, ' + entero(x.pendientes) + ' pendientes)' }
+          ];
+
+          if (x.factor > 0) {
+            filas.push({ etiqueta: 'TS/carga usado', valor: cant(x.factor) });
+          }
+
+          if (x.planMes > 0) {
+            filas.push({ color: 'var(--pizarra)', etiqueta: 'Plan del mes',
+              valor: ts(x.planMes) });
+          }
+
+          if (x.brecha !== null && x.brecha !== undefined) {
+            filas.push({ etiqueta: 'Contra su plan a la fecha', valor: signo(x.brecha),
+              clase: x.brecha > 0.5 ? 'sube' : (x.brecha < -0.5 ? 'baja' : '') });
+          }
+
+          return globoHTML({
+            titulo: x.proveedor,
+            subtitulo: x.listaProductos.join(' · '),
+            filas: filas,
+            pie: x.corte
+              ? 'SAP lo tiene cargado hasta el ' + fecha(x.corte) + '.'
+              : 'Sin ingresos en SAP: todo lo suyo se estima.'
+          });
+        },
+        destacar: function (i) { encender(caja, i); },
+        apagar: function () { apagar(caja); }
+      });
+    }
+  </script>
+
+  <script>
+    /* =================================================================
+       TABLAS
+
+       Una tabla se ordena haciendo clic en la columna que interesa, que es
+       donde la gente ya lo busca. Eso saca dos desplegables de cada panel.
+       ================================================================= */
+
+    function montarOrden() {
+      Array.prototype.forEach.call(
+        document.querySelectorAll('table[data-tabla] th[data-orden]'),
+        function (th) {
+          if (th.querySelector('.th-orden')) return;
+
+          var boton = document.createElement('button');
+
+          boton.type = 'button';
+          boton.className = 'th-orden';
+          boton.textContent = th.textContent.trim();
+          th.textContent = '';
+          th.appendChild(boton);
+        }
+      );
+
+      document.addEventListener('click', function (ev) {
+        if (!ev.target.closest) return;
+
+        var th = ev.target.closest('th[data-orden]');
+
+        if (!th) return;
+
+        var tabla = th.closest('table[data-tabla]');
+
+        if (!tabla) return;
+
+        var nombre = tabla.getAttribute('data-tabla');
+        var campo = th.getAttribute('data-orden');
+        var estado = ORDEN[nombre];
+
+        if (!estado) return;
+
+        // Segundo clic en la misma columna: se da vuelta el sentido.
+        if (estado.campo === campo) {
+          estado.sentido = estado.sentido === 'desc' ? 'asc' : 'desc';
+        } else {
+          estado.campo = campo;
+          estado.sentido = 'desc';
+        }
+
+        if (nombre === 'promedios') dibujarHomologacion();
+        else render();
+      });
+    }
+
+    /** Los vacíos van siempre al final: "sin precio" no es cero. */
+    function comparar(a, b, sentido) {
+      var va = a === null || a === undefined || a === '';
+      var vb = b === null || b === undefined || b === '';
+
+      if (va && vb) return 0;
+      if (va) return 1;
+      if (vb) return -1;
+
+      if (typeof a === 'string' || typeof b === 'string') {
+        var d = String(a).localeCompare(String(b), 'es',
+          { numeric: true, sensitivity: 'base' });
+
+        return sentido === 'asc' ? d : -d;
+      }
+
+      return sentido === 'asc' ? a - b : b - a;
+    }
+
+    function ordenar(lista, estado) {
+      return lista.slice().sort(function (a, b) {
+        return comparar(a[estado.campo], b[estado.campo], estado.sentido);
+      });
+    }
+
+    function marcarOrden(nombre) {
+      var tabla = document.querySelector('table[data-tabla="' + nombre + '"]');
+
+      if (!tabla) return;
+
+      Array.prototype.forEach.call(tabla.querySelectorAll('th[data-orden]'),
+        function (th) {
+          if (th.getAttribute('data-orden') === ORDEN[nombre].campo) {
+            th.setAttribute('aria-sort',
+              ORDEN[nombre].sentido === 'asc' ? 'ascending' : 'descending');
+          } else {
+            th.removeAttribute('aria-sort');
+          }
+        });
+    }
+
+    function celdaN(html, clase) {
+      return '<td class="number ' + (clase || '') + '">' + html + '</td>';
+    }
+
+    function dibujarTablaProveedores() {
+      var cuerpo = document.getElementById('provBody');
+      var pie = document.getElementById('provFoot');
+      var buscar = normalizar(document.getElementById('bProv').value);
+      var situacion = document.getElementById('fSituacion').value;
+
+      var lista = PROVEEDORES.filter(function (x) {
+        if (buscar && normalizar(x.proveedor).indexOf(buscar) === -1) return false;
+        if (situacion === 'bajo') return x.brecha !== null && x.brecha < 0;
+        if (situacion === 'sobre') return x.brecha !== null && x.brecha > 0;
+        if (situacion === 'sinplan') return !x.planMes;
+        if (situacion === 'pendientes') return x.pendientes > 0;
+        return true;
+      });
+
+      lista = ordenar(lista, ORDEN.prov);
+      marcarOrden('prov');
+
+      texto('conteoProv', PROVEEDORES.length + ' proveedores · top 3 ' +
+        pct(METRICAS.top3));
+      texto('cuentaProv', lista.length === PROVEEDORES.length ? ''
+        : lista.length + ' de ' + PROVEEDORES.length);
+
+      if (!lista.length) {
+        cuerpo.innerHTML = '<tr class="fila-vacia"><td colspan="16">' +
+          (PROVEEDORES.length ? 'Ningún proveedor cumple ese filtro.'
+                              : 'Nada que mostrar con estos filtros.') + '</td></tr>';
+        pie.innerHTML = '';
+        return;
+      }
+
+      cuerpo.innerHTML = lista.map(function (x) {
+        return '<tr>' +
+          '<td><span class="puesto">' + x.puesto + '</span> <strong>' +
+            esc(corta(x.proveedor)) + '</strong>' +
+            (x.sinPlan && x.total > 0
+              ? ' <span class="sello-fuente es-flojo">sin plan</span>' : '') +
+            '</td>' +
+          celdaN(x.planMes ? cant(x.planMes) : '—') +
+          celdaN(x.planFecha ? cant(x.planFecha) : '—') +
+          celdaN(entero(x.camiones)) +
+          celdaN(entero(x.enSap)) +
+          celdaN(x.pendientes ? entero(x.pendientes) : '—',
+            x.pendientes ? 'val-madera' : '') +
+          celdaN(cant(x.tsReal)) +
+          celdaN(x.tsEstimada ? cant(x.tsEstimada) : '—') +
+          celdaN('<strong>' + cant(x.total) + '</strong>') +
+          celdaN(x.brecha === null ? '—' : signo(x.brecha),
+            x.brecha !== null && x.brecha < 0 ? 'val-riesgo' : '') +
+          celdaN(x.cumplimiento === null ? '—' : pct(x.cumplimiento),
+            x.cumplimiento !== null && x.cumplimiento < 1 ? 'val-riesgo' : 'val-verde') +
+          celdaN(x.factor ? cant(x.factor) : '—') +
+          celdaN(x.precio === null ? '—' : precio(x.precio)) +
+          celdaN(x.costo ? monto(x.costo) : '—') +
+          '<td class="num">' + esc(fecha(x.corte) || '—') + '</td>' +
+          '<td class="num">' + esc(fecha(x.ultimo) || '—') + '</td>' +
+          '</tr>';
+      }).join('');
+
+      var t = { planMes: 0, planFecha: 0, camiones: 0, enSap: 0, pendientes: 0,
+        tsReal: 0, tsEstimada: 0, total: 0, costo: 0 };
+
+      lista.forEach(function (x) {
+        Object.keys(t).forEach(function (k) { t[k] += Number(x[k]) || 0; });
+      });
+
+      pie.innerHTML = '<tr><td>TOTAL</td>' +
+        celdaN(cant(t.planMes)) + celdaN(cant(t.planFecha)) +
+        celdaN(entero(t.camiones)) + celdaN(entero(t.enSap)) +
+        celdaN(entero(t.pendientes)) + celdaN(cant(t.tsReal)) +
+        celdaN(cant(t.tsEstimada)) + celdaN(cant(t.total)) +
+        celdaN(t.planFecha ? signo(t.total - t.planFecha) : '—',
+          t.planFecha && t.total < t.planFecha ? 'val-riesgo' : '') +
+        celdaN(t.planFecha ? pct(t.total / t.planFecha) : '—') +
+        celdaN('—') + celdaN('—') + celdaN(monto(t.costo)) +
+        '<td></td><td></td></tr>';
+    }
+
+    function dibujarTablaDetalle() {
+      var cuerpo = document.getElementById('detalleBody');
+      var lista = ordenar(FILAS, ORDEN.detalle);
+
+      marcarOrden('detalle');
+      texto('conteoDetalle', entero(FILAS.length) + ' camiones' +
+        (lista.length > 600 ? ' · se muestran 600' : ''));
+
+      if (!lista.length) {
+        cuerpo.innerHTML = '<tr class="fila-vacia"><td colspan="13">' +
+          'Sin camiones en el rango elegido.</td></tr>';
+        return;
+      }
+
+      cuerpo.innerHTML = lista.slice(0, 600).map(function (f) {
+        var clase = f.fuente === 'SAP' ? 'es-real'
+          : (f.fuente === 'ESTIMADO' ? 'es-est' : 'es-flojo');
+
+        return '<tr>' +
+          '<td class="num">' + esc(fecha(f.fecha)) + '</td>' +
+          '<td><span class="sello-fuente ' + clase + '">' + esc(f.estado) +
+            '</span></td>' +
+          '<td>' + esc(producto(f.producto)) + '</td>' +
+          '<td><strong>' + esc(corta(f.proveedor)) + '</strong></td>' +
+          '<td>' + esc(f.proveedorPlanilla || '—') + '</td>' +
+          '<td>' + esc(f.comuna || '') + '</td>' +
+          '<td class="num">' + esc(f.guia || '') + '</td>' +
+          '<td class="num">' + esc(f.patente || '') + '</td>' +
+          celdaN(f.pesoBruto === null || f.pesoBruto === undefined || f.pesoBruto === ''
+            ? '—' : cant(f.pesoBruto)) +
+          celdaN('<strong>' + cant(f.ts) + '</strong>') +
+          celdaN(f.precio === null || f.precio === undefined ? '—' : precio(f.precio)) +
+          celdaN(f.costo === null || f.costo === undefined ? '—' : monto(f.costo)) +
+          '<td><span class="sello-fuente ' + clase + '">' +
+            esc(f.detalleFuente) + '</span></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    /* =================================================================
+       HOMOLOGACIÓN
+       ================================================================= */
+
+    function dibujarHomologacion() {
+      if (!DATA) return;
+
+      var f = DATA.fuente;
+      var pendientes = f.sinHomologar || [];
+
+      var camiones = pendientes.reduce(function (t, x) { return t + x.camiones; }, 0);
+      var tsSinPlan = (f.sinPlan || []).reduce(function (t, x) { return t + x.ts; }, 0);
+
+      document.getElementById('homoCifras').innerHTML = [
+        {
+          tag: 'Camiones sin par', val: entero(camiones),
+          clase: camiones ? 'val-riesgo' : 'val-verde',
+          pie: camiones ? 'Hoy suman cero TS' : 'Todos los nombres cruzan'
+        },
+        {
+          tag: 'Proveedores sin plan', val: entero((f.sinPlan || []).length),
+          clase: (f.sinPlan || []).length ? 'val-madera' : 'val-verde',
+          pie: tsSinPlan ? cant(tsSinPlan) + ' ' + DATA.unidad + ' sin valorizar'
+                         : 'Todo lo que entró tiene plan'
+        },
+        {
+          tag: 'Pares escritos a mano', val: entero(f.homologacion.pares),
+          pie: 'En la hoja ' + f.homologacion.hoja
+        }
+      ].map(function (c) {
+        return '<div class="portada-cifra">' +
+          '<div class="portada-tag">' + esc(c.tag) + '</div>' +
+          '<div class="portada-val ' + (c.clase || '') + '">' + esc(c.val) + '</div>' +
+          '<div class="portada-pie">' + esc(c.pie) + '</div></div>';
+      }).join('');
+
+      var ojo = [];
+
+      if ((f.sinCruce || []).length) {
+        ojo.push('Hay camiones cuyo proveedor SÍ cruza pero cuya guía no, en ' +
+          'días que SAP ya cubre: ' + esc(f.sinCruce.map(function (x) {
+            return x.proveedor + ' (' + x.camiones + ')';
+          }).join(', ')) + '. Eso no se arregla acá: hay que revisar el Nº de ' +
+          'guía en la planilla o el export de SAP.');
+      }
+
+      var caja = document.getElementById('homoOjo');
+
+      caja.innerHTML = ojo.join(' ');
+      caja.classList.toggle('se-ve', ojo.length > 0);
+
+      dibujarPendientes(pendientes);
+      dibujarPromedios();
+    }
+
+    function dibujarPendientes(pendientes) {
+      var caja = document.getElementById('homoPendientes');
+
+      texto('conteoHomo', pendientes.length
+        ? pendientes.length + (pendientes.length === 1 ? ' nombre' : ' nombres')
+        : 'ninguno');
+
+      if (!pendientes.length) {
+        caja.innerHTML = vacio(
+          'Ningún camión del mes quedó sin par. Lo que se escriba en la hoja ' +
+          DATA.fuente.homologacion.hoja + ' sigue mandando sobre el parecido.'
+        );
+        return;
+      }
+
+      var sap = DATA.fuente.proveedoresSap || [];
+      var plan = DATA.fuente.proveedoresPlan || [];
+
+      var cuerpo = pendientes.map(function (x, i) {
+        function opciones(lista, etiqueta) {
+          return '<option value="">' + esc(etiqueta) + '</option>' +
+            lista.map(function (v) {
+              // Se preselecciona el parecido más alto: casi siempre es el
+              // correcto, y confirmar es más rápido que buscar en la lista.
+              var sel = v === x.sugerenciaSap || v === x.sugerenciaPlan
+                ? ' selected' : '';
+
+              return '<option value="' + esc(v) + '"' + sel + '>' + esc(v) +
+                '</option>';
+            }).join('');
+        }
+
+        return '<tr>' +
+          '<td><strong>' + esc(x.proveedor) + '</strong></td>' +
+          celdaN(entero(x.camiones)) +
+          '<td class="homo-asignar">' +
+            '<select id="hsap-' + i + '">' + opciones(sap, 'Proveedor SAP…') +
+            '</select></td>' +
+          '<td class="homo-asignar">' +
+            '<select id="hplan-' + i + '">' + opciones(plan, 'Proveedor del Plan…') +
+            '</select>' +
+            '<button class="boton boton-fino" type="button" data-asignar="' +
+              esc(x.proveedor) + '" data-indice="' + i + '">Asignar</button>' +
+          '</td></tr>';
+      }).join('');
+
+      caja.innerHTML = '<div class="tabla-marco tabla-fija"><table><thead><tr>' +
+        '<th>Nombre en la planilla</th><th class="number">Camiones</th>' +
+        '<th>Proveedor SAP</th><th>Proveedor del Plan</th>' +
+        '</tr></thead><tbody>' + cuerpo + '</tbody></table></div>';
+    }
+
+    function dibujarPromedios() {
+      var cuerpo = document.getElementById('promediosBody');
+      var lista = ordenar(DATA.promedios || [], ORDEN.promedios);
+
+      marcarOrden('promedios');
+      texto('conteoPromedios', (DATA.promedios || []).length + ' proveedores · ' +
+        'ventana ' + DATA.fuente.ventanaPromedio + ' días');
+
+      if (!lista.length) {
+        cuerpo.innerHTML = '<tr class="fila-vacia"><td colspan="7">' +
+          'La hoja Ingresos Sap no tiene cargas con cantidad.</td></tr>';
+        return;
+      }
+
+      cuerpo.innerHTML = lista.map(function (x) {
+        return '<tr>' +
+          '<td><strong>' + esc(corta(x.proveedor)) + '</strong></td>' +
+          '<td>' + esc(x.material) + '</td>' +
+          celdaN(entero(x.cargas)) +
+          celdaN('<strong>' + cant(x.promedio) + '</strong>',
+            x.fueraDeRango ? 'val-riesgo' : '') +
+          '<td>' + esc(x.base) + '</td>' +
+          '<td class="num">' + esc(fecha(x.ultima) || '—') + '</td>' +
+          '<td>' + (x.fueraDeRango
+            ? '<span class="sello-fuente es-flojo">fuera del rango ' +
+              esc(DATA.fuente.rangoCarga.join('–')) + ' TS</span>'
+            : '') + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // Delegado: la tabla se redibuja entera en cada carga, así que un
+    // manejador por botón habría que volver a colgarlo cada vez.
+    document.addEventListener('click', function (ev) {
+      if (!ev.target.closest) return;
+
+      var boton = ev.target.closest('[data-asignar]');
+
+      if (!boton) return;
+
+      asignar(boton.getAttribute('data-asignar'), boton.getAttribute('data-indice'));
+    });
+
+    /**
+     * Escribe el par y recarga.
+     *
+     * Recargar no es pereza: el cruce se resuelve en el servidor al leer las
+     * hojas, así que tocar la tabla acá mostraría un panel que no corresponde
+     * a ningún dato.
+     */
+    function asignar(nombre, indice) {
+      if (OCUPADO) return;
+
+      var sap = (document.getElementById('hsap-' + indice) || {}).value || '';
+      var plan = (document.getElementById('hplan-' + indice) || {}).value || '';
+
+      if (!sap && !plan) {
+        recado('mal', 'Elige al menos el proveedor de SAP o el del Plan.');
+        return;
+      }
+
+      OCUPADO = true;
+      velo(true, 'Escribiendo la equivalencia');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          OCUPADO = false;
+          recado('bien', '"' + res.planilla + '" quedó apuntando a ' +
+            (res.sap || '(sin SAP)') + (res.plan ? ' · Plan: ' + res.plan : '') +
+            (res.actualizado ? ' (se actualizó la fila que ya existía)' : '') +
+            '. Recargando para rehacer el cruce…');
+          cargarTodo();
+        })
+        .withFailureHandler(function (err) {
+          OCUPADO = false;
+          velo(false);
+          recado('mal', mensaje(err));
+        })
+        .asignarDesdePanel(nombre, sap, plan);
+    }
+
+    function recado(tipo, mensajeTexto) {
+      var caja = document.getElementById('homoRecado');
+
+      caja.className = 'recado recado-' + tipo + ' se-ve';
+      caja.textContent = mensajeTexto;
+    }
+
+    /* =================================================================
+       UTILIDADES
+       ================================================================= */
+
+    function observarPaneles() {
+      var paneles = document.querySelectorAll('.panel:not(.se-ve)');
+
+      if (!SUAVE || !('IntersectionObserver' in window)) {
+        Array.prototype.forEach.call(paneles, function (p) { p.classList.add('se-ve'); });
+        return;
+      }
+
+      var ojo = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('se-ve');
+            ojo.unobserve(e.target);
+          }
+        });
+      }, { rootMargin: '0px 0px -50px 0px', threshold: .05 });
+
+      Array.prototype.forEach.call(paneles, function (p) { ojo.observe(p); });
+    }
+
+    function velo(visible, mensajeTexto) {
+      if (mensajeTexto) texto('veloTexto', mensajeTexto);
+      document.getElementById('velo').hidden = !visible;
+    }
+
+    function mostrarError(t) {
+      var caja = document.getElementById('avisoMal');
+
+      caja.textContent = String(t);
+      caja.classList.add('se-ve');
+    }
+
+    function ocultarError() {
+      var caja = document.getElementById('avisoMal');
+
+      caja.textContent = '';
+      caja.classList.remove('se-ve');
+    }
+
+    function mensaje(err) {
+      return err && err.message ? err.message : String(err);
+    }
+
+    function texto(id, valor) {
+      var nodo = document.getElementById(id);
+      if (nodo) nodo.textContent = String(valor);
+    }
+
+    function esc(valor) {
+      return String(valor === null || valor === undefined ? '' : valor)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function vacio(m) { return '<div class="vacio">' + esc(m) + '</div>'; }
+
+    function recortar(t, n) {
+      t = String(t || '');
+      return t.length > n ? t.slice(0, n - 1) + '…' : t;
+    }
+
+    function corta(valor) { return recortar(valor, 30); }
+
+    function dos(n) { return (n < 10 ? '0' : '') + n; }
+
+    function cant(valor) {
+      return new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: 0, maximumFractionDigits: 1
+      }).format(Number(valor) || 0);
+    }
+
+    function entero(valor) {
+      return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
+        .format(Number(valor) || 0);
+    }
+
+    function pct(valor) {
+      return new Intl.NumberFormat('es-CL', {
+        style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1
+      }).format(Number(valor) || 0);
+    }
+
+    function precio(valor) {
+      if (valor === null || valor === undefined || !isFinite(Number(valor))) return '—';
+
+      return new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }).format(Number(valor));
+    }
+
+    function monto(valor) {
+      if (valor === null || valor === undefined || !isFinite(Number(valor))) return '—';
+
+      return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
+        .format(Number(valor));
+    }
+
+    function corto(valor) {
+      var n = Number(valor) || 0;
+
+      if (Math.abs(n) >= 1000000) return cant(n / 1000000) + 'M';
+      if (Math.abs(n) >= 1000) return cant(n / 1000) + 'k';
+
+      return cant(n);
+    }
+
+    function ts(valor) { return cant(valor) + ' ' + DATA.unidad; }
+
+    function signo(valor) {
+      var n = Number(valor) || 0;
+      return (n > 0 ? '+' : '') + cant(n);
+    }
+
+    function fecha(clave) {
+      var m = String(clave || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+    }
+
+    function normalizar(valor) {
+      return String(valor || '').toLowerCase().normalize('NFD')
+        .replace(/[̀-ͯ]/g, '').trim();
+    }
+
+    function clave(valor) {
+      return String(valor || '').toUpperCase().normalize('NFD')
+        .replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
+    }
+
+    function retardar(fn, espera) {
+      var reloj = null;
+
+      return function () {
+        var contexto = this;
+        var args = arguments;
+
+        clearTimeout(reloj);
+        reloj = setTimeout(function () { fn.apply(contexto, args); }, espera);
+      };
+    }
+
+    /* =================================================================
+       ARRANQUE
+
+       Va al final a propósito: las funciones de los bloques anteriores ya
+       existen, y las de este también. Llamar a cargarTodo() más arriba
+       reventaría con un ReferenceError en cuanto necesitara algo de acá.
+       ================================================================= */
+
+    renderLento = retardar(render, 180);
+
+    window.addEventListener('resize', retardar(function () {
+      if (DATA) dibujarGraficos();
+    }, 200));
+
+    cargarTodo();
+  </script>
+</body>
+</html>
