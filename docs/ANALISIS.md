@@ -146,9 +146,13 @@ SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
 
 ## El panel web
 
-`Panel.gs` + `Panel.html`. Una sola llamada (`getDashboardData`) entrega todo
-lo que la pantalla necesita; el navegador filtra y dibuja sin volver al
-servidor.
+`Tablero.gs` (el código) + `Panel.html` (la vista). Una sola llamada
+(`getDashboardData`) entrega todo lo que la pantalla necesita; el navegador
+filtra y dibuja sin volver al servidor.
+
+Los nombres son distintos a propósito: Apps Script no admite dos archivos con
+el mismo nombre aunque uno sea `.gs` y el otro `.html`, así que un `Panel.gs`
+al lado de `Panel.html` no se puede crear.
 
 El cruce no se repite ahí: lo resuelve `Motor.gs`, el mismo que escribe las
 hojas. Si cada salida lo resolviera por su cuenta, tarde o temprano dirían

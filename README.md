@@ -8,8 +8,8 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
 
 ## El panel
 
-`apps-script/Panel.html` es un panel web con el mismo motor de cruce que las
-hojas: se abre desde **Control Ingreso › Abrir panel**, o se publica con
+`apps-script/Panel.html` (la vista) con `apps-script/Tablero.gs` (el código)
+es un panel web con el mismo motor de cruce que las hojas: se abre desde **Control Ingreso › Abrir panel**, o se publica con
 **Implementar › Nueva implementación › Aplicación web** (`doGet`).
 
 Trae la regla del mes, el avance acumulado contra el plan prorrateado por días
@@ -44,7 +44,9 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 1. Abrir la planilla `Ingreso astilla verde mapal` →
    **Extensiones › Apps Script**.
 2. Crear un archivo por cada `.gs` de `apps-script/` y pegar el contenido
-   (también los HTML `HomologacionUI` y `Panel`). Si se usa [clasp](https://github.com/google/clasp):
+   (también los HTML `HomologacionUI` y `Panel`). Apps Script no admite dos
+   archivos con el mismo nombre aunque cambie la extensión: por eso el código
+   del panel va en `Tablero.gs` y la vista en `Panel.html`. Si se usa [clasp](https://github.com/google/clasp):
 
    ```bash
    cd apps-script

@@ -112,7 +112,7 @@ global.HtmlService = {
 
 // --- Carga del código del proyecto ----------------------------------------
 const fs = require('fs');
-const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Panel.gs'];
+const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Tablero.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
 // Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
 // ayudante para poder tocar la configuración desde la prueba.

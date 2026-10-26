@@ -1,5 +1,10 @@
 /**
- * Panel web: una sola llamada entrega todo lo que la pantalla necesita.
+ * Tablero web: una sola llamada entrega todo lo que la pantalla necesita.
+ *
+ * El código va en 'Tablero.gs' y la vista en 'Panel.html' a propósito: Apps
+ * Script no admite dos archivos con el mismo nombre aunque uno sea .gs y el
+ * otro .html, así que un 'Panel.gs' al lado de 'Panel.html' no se puede
+ * crear.
  *
  * El cruce lo resuelve Motor.gs, el mismo que escribe las hojas, así que el
  * panel y el 'Control Ingreso' no pueden decir cifras distintas del mismo mes.
