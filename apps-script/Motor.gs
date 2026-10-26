@@ -8,12 +8,23 @@
  *
  * Devuelve una fila por camión:
  *   - un camión de la planilla manual, con su cantidad real si su guía ya
- *     está en SAP, o estimada con el promedio TS/carga de su proveedor;
+ *     está en SAP, o estimada con el promedio TS/carga de su material;
  *   - una carga que está en SAP y que nadie registró a mano.
  *
- * El criterio de cuándo se estima y cuándo no está en corteCubre(): hasta la
- * última fecha que SAP tiene de ese proveedor manda SAP, porque su total ya
- * incluye esos días. Después del corte manda la planilla.
+ * La regla del cruce es la guía, y nada más: **proveedor + material + guía**.
+ * Si esa guía está en SAP, manda SAP y la cantidad es la real. Si no está, el
+ * camión se complementa con la planilla y se valoriza con el promedio del
+ * material.
+ *
+ * Antes había además un corte por fecha: hasta la última fecha contabilizada
+ * de cada proveedor se daba por hecho que SAP ya tenía todo, y un camión sin
+ * cruzar en esos días se dejaba en cero para no contarlo dos veces. Ese
+ * supuesto era falso: SAP no se carga en orden, va dejando huecos hacia atrás,
+ * así que la regla botaba a cero camiones que de verdad faltaban y el mes
+ * quedaba corto. Se cambió por un aviso, que es lo que la regla intentaba ser:
+ * cuando un proveedor y material tiene cargas en SAP que nadie cruzó y además
+ * camiones estimados, los dos lados quedan marcados para revisar el Nº de
+ * guía. El número ya no se pierde; lo que se ve es la sospecha.
  */
 function resolverIngresos(libro) {
   const sap = cargarSap(libro);
@@ -23,25 +34,36 @@ function resolverIngresos(libro) {
   const homologacionProductos = cargarHomologacionProductos(libro);
   const promedios = calcularPromedios(sap);
 
+  // ---- 1) Cruce por proveedor + material + guía ---------------------------
+  // Se resuelve TODO el cruce antes de valorizar nada: para saber si una
+  // estimación es sospechosa hay que saber qué cargas de SAP quedaron sueltas,
+  // y eso sólo se sabe una vez que pasaron todos los camiones.
+  const pendientesDeCruce = planilla.filas.map(function (fila) {
+    const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
+    const material = resolverProducto(fila.producto, homologacionProductos, sap, plan);
+
+    const cargaSap = buscarCargaSap(promedios, equivalencia.sap, material.sap, fila.guia);
+    if (cargaSap) cargaSap.usado = true;
+
+    return { fila: fila, equivalencia: equivalencia, material: material, cargaSap: cargaSap };
+  });
+
+  // Las cargas de SAP que ningún camión reclamó se emparejan con los camiones
+  // que no cruzaron, dentro del mismo proveedor y material y por cercanía de
+  // fecha. Cada carga suelta marca a UN camión, el más probable: avisar a
+  // todos los pendientes del proveedor por una sola carga suelta dejaría el
+  // mes entero marcado, y una marca que está en todas partes no se mira.
+  emparejarSospechas(promedios, pendientesDeCruce);
+
   const filas = [];
   const guiasVistas = {};
 
-  // ---- 1) Camiones de la planilla manual ----------------------------------
-  planilla.filas.forEach(function (fila) {
-    const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
-    // El producto también se traduce: SAP, la planilla y el Plan lo escriben
-    // distinto, y el promedio TS/carga es por material.
-    const material = resolverProducto(fila.producto, homologacionProductos, sap, plan);
-
-    // Las cargas de SAP están indexadas por proveedor + guía: los números de
-    // guía se repiten entre proveedores, así que la guía sola no identifica
-    // al camión.
-    const claveCarga = (fila.guia && equivalencia.sap)
-      ? claveProveedor(equivalencia.sap) + '|' + fila.guia
-      : '';
-    const candidata = claveCarga ? promedios.porCarga[claveCarga] : null;
-    const cargaSap = (candidata && !candidata.usado) ? candidata : null;
-    if (cargaSap) cargaSap.usado = true;
+  // ---- 2) Una fila por camión de la planilla ------------------------------
+  pendientesDeCruce.forEach(function (item) {
+    const fila = item.fila;
+    const equivalencia = item.equivalencia;
+    const material = item.material;
+    const cargaSap = item.cargaSap;
 
     const mesPlanilla = claveMes(fila.fecha);
     const mesSap = cargaSap ? claveMes(cargaSap.fecha) : '';
@@ -56,6 +78,7 @@ function resolverIngresos(libro) {
     let cantidad = 0;
     let detalleFuente = '';
     let promedioUsado = 0;
+    let revisarGuia = false;
 
     if (cargaSap) {
       estado = ESTADO.EN_SAP;
@@ -68,10 +91,6 @@ function resolverIngresos(libro) {
       estado = ESTADO.SIN_HOMOLOGAR;
       fuente = 'SIN DATO';
       detalleFuente = 'sin homologar';
-    } else if (corteCubre(promedios, equivalencia.sap, fila.fecha)) {
-      estado = ESTADO.SIN_CRUCE;
-      fuente = 'SIN DATO';
-      detalleFuente = 'SAP ya cubre este día: revisar el Nº de guía';
     } else {
       const referencia = promedioPara(
         promedios, equivalencia.sap, material.canonico, material.sap);
@@ -82,18 +101,26 @@ function resolverIngresos(libro) {
       if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
       else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
       else estado = ESTADO.PENDIENTE;
+
+      if (item.sospecha) {
+        revisarGuia = true;
+        detalleFuente += ' - SAP tiene sin cruzar la guía ' + item.sospecha.guia +
+          ' del ' + claveFecha(item.sospecha.fecha) +
+          ', mismo proveedor y material: puede ser este camión';
+      }
     }
 
     let duplicado = false;
 
     if (fila.guia) {
-      // El duplicado se mide por proveedor + guía, no por la guía sola.
-      const claveDuplicado = claveProveedor(fila.proveedor) + '|' + fila.guia;
+      // El duplicado se mide por proveedor + material + guía, igual que el cruce.
+      const claveDuplicado = claveCarga(fila.proveedor, material.canonico, fila.guia);
       if (guiasVistas[claveDuplicado]) {
         duplicado = true;
         estado = ESTADO.DUPLICADO + ' / ' + estado;
         fuente = 'SIN DATO';
         cantidad = 0;
+        revisarGuia = false;
       }
       guiasVistas[claveDuplicado] = true;
     }
@@ -106,6 +133,8 @@ function resolverIngresos(libro) {
       fuente: fuente,
       detalleFuente: detalleFuente,
       duplicado: duplicado,
+      revisarGuia: revisarGuia,
+      guiaSospechosa: item.sospecha ? item.sospecha.guia : '',
       producto: fila.producto,
       productoCorto: material.canonico,
       productoSap: material.sap,
@@ -132,11 +161,13 @@ function resolverIngresos(libro) {
     });
   });
 
-  // ---- 2) Cargas que sólo están en SAP ------------------------------------
+  // ---- 3) Cargas que sólo están en SAP ------------------------------------
   promedios.cargas.forEach(function (carga) {
     if (carga.usado) return;
 
     const nombrePlan = resolverPlanDesdeSap(carga.proveedor, homologacion, plan);
+    const nombreProducto = resolverProductoDesdeSap(
+      carga.material, homologacionProductos, plan);
 
     filas.push({
       mes: claveMes(carga.fecha),
@@ -148,8 +179,10 @@ function resolverIngresos(libro) {
         ? 'SAP (real, ' + carga.lineas + ' líneas)'
         : 'SAP (real)',
       duplicado: false,
+      revisarGuia: false,
+      guiaSospechosa: '',
       producto: carga.material,
-      productoCorto: resolverProductoDesdeSap(carga.material, homologacionProductos, plan),
+      productoCorto: nombreProducto,
       productoSap: carga.material,
       productoSinHomologar: false,
       proveedorPlanilla: '',
@@ -186,15 +219,103 @@ function resolverIngresos(libro) {
 }
 
 /**
- * ¿La fecha del camión ya está dentro de lo que SAP tiene contabilizado para
- * ese proveedor? Si lo está, su carga ya figura en el total real de SAP y
- * estimarla sería contar dos veces lo mismo.
+ * Busca en SAP la carga de un camión: proveedor + material + guía.
+ *
+ * Cuando el producto de la planilla todavía no tiene par en SAP no se puede
+ * exigir el material, porque no hay con qué compararlo; en ese caso se cae a
+ * proveedor + guía, que es lo que se usaba antes. Es menos estricto, pero
+ * perder un cruce verdadero por un nombre de producto sin homologar es peor
+ * que el riesgo de pegarle a la carga de otro material del mismo proveedor
+ * con la misma guía.
  */
-function corteCubre(promedios, proveedorSap, fecha) {
-  if (!proveedorSap || !fecha) return false;
-  const corte = corteSapDe(promedios, proveedorSap);
-  if (!corte) return false;
-  return fecha <= corte;
+function buscarCargaSap(promedios, proveedorSap, materialSap, guia) {
+  if (!guia || !proveedorSap) return null;
+
+  if (materialSap) {
+    const exacta = promedios.porCarga[claveCarga(proveedorSap, materialSap, guia)];
+    return (exacta && !exacta.usado) ? exacta : null;
+  }
+
+  const prefijo = claveProveedor(proveedorSap) + '|';
+  const sufijo = '|' + guia;
+  let encontrada = null;
+
+  Object.keys(promedios.porCarga).some(function (clave) {
+    if (clave.indexOf(prefijo) !== 0) return false;
+    if (clave.length < sufijo.length ||
+        clave.substring(clave.length - sufijo.length) !== sufijo) {
+      return false;
+    }
+    const carga = promedios.porCarga[clave];
+    if (carga.usado) return false;
+    encontrada = carga;
+    return true;
+  });
+
+  return encontrada;
+}
+
+/**
+ * Empareja las cargas de SAP que nadie cruzó con los camiones de la planilla
+ * que no encontraron su guía, dentro del mismo proveedor y material.
+ *
+ * Las dos puntas son el mismo hecho visto dos veces: un camión que entró y
+ * quedó escrito con un número de guía distinto en cada sistema. Emparejarlas
+ * por cercanía de fecha deja el aviso donde se puede actuar —nombra la guía
+ * que SAP tiene sin cruzar— y, sobre todo, lo acota: nunca se marcan más
+ * camiones que cargas sueltas hay.
+ *
+ * No cambia ninguna cantidad: el camión se estima igual. Lo que se marca es
+ * la sospecha, no una corrección.
+ */
+function emparejarSospechas(promedios, pendientesDeCruce) {
+  const grupos = {};
+
+  function grupo(clave) {
+    if (!grupos[clave]) grupos[clave] = { sueltas: [], camiones: [] };
+    return grupos[clave];
+  }
+
+  promedios.cargas.forEach(function (carga) {
+    if (carga.usado || !carga.fecha) return;
+    grupo(claveGrupoSospecha(carga.proveedor, carga.material)).sueltas.push(carga);
+  });
+
+  pendientesDeCruce.forEach(function (item) {
+    if (item.cargaSap || !item.equivalencia.sap || !item.fila.fecha) return;
+    grupo(claveGrupoSospecha(item.equivalencia.sap, item.material.sap)).camiones.push(item);
+  });
+
+  const tope = (Number(CONFIG.DIAS_SOSPECHA_GUIA) || 15) * 86400000;
+
+  Object.keys(grupos).forEach(function (clave) {
+    const sueltas = grupos[clave].sueltas.slice().sort(function (a, b) {
+      return a.fecha - b.fecha;
+    });
+    const camiones = grupos[clave].camiones;
+
+    sueltas.forEach(function (carga) {
+      let elegido = null;
+      let menor = Infinity;
+
+      camiones.forEach(function (item) {
+        if (item.sospecha) return;
+        const distancia = Math.abs(item.fila.fecha - carga.fecha);
+        if (distancia <= tope && distancia < menor) {
+          menor = distancia;
+          elegido = item;
+        }
+      });
+
+      if (elegido) {
+        elegido.sospecha = { guia: carga.guiaTexto || carga.guia, fecha: carga.fecha };
+      }
+    });
+  });
+}
+
+function claveGrupoSospecha(proveedorSap, materialSap) {
+  return claveProveedor(proveedorSap) + '|' + claveProducto(materialSap);
 }
 
 /** Precio unitario que el Plan le fija a un producto y proveedor. */

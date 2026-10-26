@@ -49,7 +49,9 @@ function getDashboardData() {
   datos.filas.forEach(function (fila) {
     if (!fila.mes || fila.mes < historiaDesde) return;
 
-    const precio = precioDelPlan(datos.plan, fila.producto, fila.proveedorPlan);
+    // El precio se busca por el nombre homologado: el Plan no conoce los
+    // nombres de SAP ni las variantes escritas a mano.
+    const precio = precioDelPlan(datos.plan, fila.productoCorto, fila.proveedorPlan);
 
     filas.push({
       fecha: fila.fechaClave,
@@ -57,7 +59,8 @@ function getDashboardData() {
       estado: fila.estado,
       fuente: fila.fuente,
       detalleFuente: fila.detalleFuente,
-      producto: fila.producto,
+      producto: fila.productoCorto,
+      productoOrigen: fila.producto,
       proveedor: fila.proveedor,
       proveedorSap: fila.proveedorSap,
       proveedorPlan: fila.proveedorPlan,
@@ -77,11 +80,12 @@ function getDashboardData() {
       sinPlan: fila.sinPlan,
       sinHomologar: fila.sinHomologar,
       duplicado: fila.duplicado,
+      revisarGuia: fila.revisarGuia,
       observacion: fila.observacion
     });
 
     if (fila.proveedor) proveedores[fila.proveedor] = true;
-    if (fila.producto) productos[fila.producto] = true;
+    if (fila.productoCorto) productos[fila.productoCorto] = true;
     if (fila.comuna) comunas[fila.comuna] = true;
   });
 
@@ -219,7 +223,7 @@ function listaPromedios_(promedios) {
 /** Estado de las fuentes: lo que el panel tiene que advertir sin que se pregunte. */
 function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
   const sinHomologar = {};
-  const sinCruce = {};
+  const revisarGuia = {};
   const sinPlan = {};
   // Productos escritos a mano que no encontraron par en SAP ni en el Plan: son
   // los que dejan camiones en cero sin que se vea el motivo.
@@ -243,9 +247,9 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
         (sinHomologar[fila.proveedorPlanilla] || 0) + 1;
     }
 
-    if (fila.estado === ESTADO.SIN_CRUCE) {
+    if (fila.revisarGuia) {
       const clave = fila.proveedorSap || fila.proveedor;
-      sinCruce[clave] = (sinCruce[clave] || 0) + 1;
+      revisarGuia[clave] = (revisarGuia[clave] || 0) + 1;
     }
 
     if (fila.sinPlan && !fila.sinHomologar && fila.ts > 0) {
@@ -315,7 +319,7 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
     proveedoresSap: datos.sap.proveedores,
     proveedoresPlan: datos.plan.proveedores,
     sinHomologar: aLista(sinHomologar, 'camiones'),
-    sinCruce: aLista(sinCruce, 'camiones'),
+    revisarGuia: aLista(revisarGuia, 'camiones'),
     sinPlan: aLista(sinPlan, 'ts'),
     duplicados: duplicados,
     homologacion: {

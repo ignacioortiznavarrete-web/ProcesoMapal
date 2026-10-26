@@ -19,6 +19,8 @@ const sap = [
   ['5022340673','3285','3000039','ASTILLA VERDE (TS)','07-10-2026','4800084654',20,'ASTILLA VERDE (TS)','11,395',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL'],
   ['5022400001','60575','3000040','VIRUTA-ASERUTA (TS)','02-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','7,500',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022400002','60576','3000040','VIRUTA-ASERUTA (TS)','03-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','8,100',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400020','70001','3000039','ASTILLA VERDE (TS)','06-10-2026','4800084620',10,'ASTILLA VERDE (TS)','12,800',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
+  ['5022400021','70001','3000043','ASERRIN (TS)','06-10-2026','4800086009',50,'ASERRIN (TS)','9,900',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
   ['5022400010','31505','3000043','ASERRIN (TS)','02-10-2026','4800086009',50,'ASERRIN (TS) FSC-CW','11,000',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022400011','31506','3000043','ASERRIN (TS)','03-10-2026','4800086009',50,'ASERRIN (TS) FSC-CW','11,400',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022340999','900','3000039','ASTILLA VERDE (TS)','20-09-2026','4800084654',20,'ASTILLA VERDE (TS)','12,500',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL']
@@ -79,7 +81,10 @@ const octubre2026 = [
   [15,'16-10-2026','ASERRIN HUMEDO','GUIVAR','TREHUACO','60600','BSZK30',28400,'467970','OK','variante sin traducir','','','',''],
   [16,'14-10-2026','ASERRIN','COLLICURA','SANTA JUANA','31999','FCPJ65',29800,'467971','OK','aserrín sin histórico propio','','','',''],
   [17,'14-10-2026','COMBUSTIBLE','RIO CRUCES','TALCAHUANO','24742','CPCH94',41860,'467972','OK','SAP no tiene este material','','','',''],
-  [18,'','','','','','','','','','','','','','']
+  [18,'06-10-2026','ASTILLA VERDE','COLLICURA','SANTA JUANA','70001','FCPJ65',44100,'467973','OK','misma guía que su aserrín','','','',''],
+  [19,'06-10-2026','ASERRIN','COLLICURA','SANTA JUANA','70001','FCPJ65',29500,'467974','OK','misma guía que su astilla','','','',''],
+  [20,'15-10-2026','ASERRIN','VOLCAN','QUIRIHUE','44001','HFVD15',28700,'467975','OK','aserrín sin histórico propio','','','',''],
+  [21,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -175,7 +180,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 17, '17 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 20, '20 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -186,7 +191,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 19, '19 camiones importados (sin filas de relleno)');
+assert(importado.filas === 22, '22 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -216,15 +221,17 @@ function valor(proveedor, columna, producto) {
   return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 18,
+assert(resumen.camionesPlanilla === 21,
   'entran astilla, viruta y la variante homologada; se descarta sólo ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52, 'GUIVAR: 39 TS reales + 13 TS estimadas');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones sin cruce') === 1,
-  'el camión del 02-10 sin cruce NO se estima: SAP ya cubre ese día');
-assert(String(valor('COMERCIAL GUIVAR LTDA.', 'Alertas')).indexOf('sin cruce') >= 0,
-  'el control avisa del camión sin cruce');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 2, 'GUIVAR: 2 camiones pendientes');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 65,
+  'GUIVAR: 39 TS reales + 26 estimadas. La guía que no cruza se complementa con ' +
+  'la planilla; ya no se bota a cero por la fecha, porque SAP no carga en orden');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones a revisar') === 1,
+  'queda marcado UN camión, el que calza con la carga de SAP sin cruzar');
+assert(String(valor('COMERCIAL GUIVAR LTDA.', 'Alertas')).indexOf('revisar el Nº de guía') >= 0,
+  'el control avisa de la guía a revisar sin recortar el mes');
 const corteGuivar = valor('COMERCIAL GUIVAR LTDA.', 'SAP hasta');
 assert(corteGuivar instanceof Date && corteGuivar.getDate() === 3,
   'el control muestra hasta qué día SAP cubre a cada proveedor (GUIVAR: 03-10)');
@@ -251,12 +258,19 @@ assert(guia53792[10] === 'EN SAP', 'la guía 053792 cruza con la 53792 de SAP');
 const guia53791 = detalle.find(f => String(f[6]) === '53791' && f[3] === 'GUIVAR') || [];
 assert(guia53791[11] === 12.777, 'el camión de la guía partida recibe las dos posiciones sumadas');
 assert(String(guia53791[12]).indexOf('2 líneas') > 0, 'el detalle avisa que la carga venía en 2 líneas');
-const sinCruce = detalle.find(f => String(f[6]) === '53999') || [];
-assert(sinCruce[10] === 'SIN CRUCE (día ya cubierto por SAP)', 'queda marcado SIN CRUCE');
-assert(sinCruce[11] === 0, 'el camión sin cruce no suma TS estimadas');
+// La guía manda, no la fecha: SAP no se carga en orden, así que un camión en
+// un día "ya cubierto" igual puede faltar de verdad.
+const noCruza = detalle.find(f => String(f[6]) === '53999') || [];
+assert(noCruza[10] === 'PENDIENTE (estimado)' && noCruza[11] === 13,
+  'la guía que no está en SAP se complementa con la planilla, no se bota a cero');
+assert(String(noCruza[12]).indexOf('sin cruzar la guía 53793') >= 0,
+  'y el detalle nombra la carga de SAP que podría ser ese mismo camión');
+
 const pendiente = detalle.find(f => String(f[6]) === '53850') || [];
-assert(pendiente[10] === 'PENDIENTE (estimado)',
-  'el camión posterior al corte de SAP sí se estima');
+assert(pendiente[10] === 'PENDIENTE (estimado)' && pendiente[11] === 13,
+  'el camión sin carga suelta que le calce se estima sin marca');
+assert(String(pendiente[12]).indexOf('sin cruzar la guía') < 0,
+  'una sola carga suelta marca un solo camión, no a todos los pendientes');
 
 const septiembre = detalle.find(f => String(f[6]) === '3285') || [];
 assert(String(septiembre[15]) === 'sep-2026', 'el camión de septiembre queda en su mes');
@@ -314,11 +328,38 @@ assert(String(sinTraducir[10]) === 'PENDIENTE SIN PROMEDIO' && sinTraducir[11] =
 assert(String(sinTraducir[12]).indexOf('sin histórico SAP de ASERRIN HUMEDO') >= 0,
   'y el detalle dice exactamente por qué');
 
+// El cruce es proveedor + material + guía. La misma guía de un proveedor
+// puede ser un camión de astilla y otro de aserrín: con la guía sola, cada uno
+// se llevaría la cantidad del otro.
+console.log('\n--- la guía sola no identifica al camión ---');
+
+const parGuia = detalle.filter(f => String(f[6]) === '70001' && f[3] === 'COLLICURA');
+assert(parGuia.length === 2, 'los dos camiones de la guía 70001 están en el detalle');
+
+const astillaPar = parGuia.find(f => String(f[2]) === 'ASTILLA VERDE') || [];
+const aserrinPar = parGuia.find(f => String(f[2]) === 'ASERRIN') || [];
+assert(astillaPar[10] === 'EN SAP' && astillaPar[11] === 12.8,
+  'la astilla de la guía 70001 toma sus 12,8 TS');
+assert(aserrinPar[10] === 'EN SAP' && aserrinPar[11] === 9.9,
+  'el aserrín de la MISMA guía toma sus 9,9 TS, no las de la astilla');
+assert(String(astillaPar[10]).indexOf('DUPLICADA') < 0 &&
+  String(aserrinPar[10]).indexOf('DUPLICADA') < 0,
+  'la guía repetida entre materiales distintos no es un duplicado');
+
 // Los tres materiales de SAP tienen factores muy distintos (astilla 13,
 // aserrín 11,2, viruta 7,8). Ninguno puede contagiar al otro.
+// Jerarquía del promedio: proveedor+material primero, material después.
 const aserrinCollicura = detalle.find(f => String(f[6]) === '31999') || [];
-assert(aserrinCollicura[11] === 11.2,
-  'el aserrín de COLLICURA usa el promedio de ASERRIN (11,2), no el de viruta ni el de astilla');
+assert(aserrinCollicura[11] === 9.9,
+  'COLLICURA tiene aserrín propio en SAP: se usa ese, no el promedio del material');
+assert(String(aserrinCollicura[12]).indexOf('proveedor + material') >= 0,
+  'y el detalle dice que salió de su propio histórico del material');
+
+const aserrinVolcan = detalle.find(f => String(f[6]) === '44001') || [];
+assert(String(aserrinVolcan[12]).indexOf('promedio del material') >= 0,
+  'VOLCAN no tiene aserrín propio: cae al promedio del material');
+assert(aserrinVolcan[11] > 9.9 && aserrinVolcan[11] < 11.4,
+  'y ese promedio es el del ASERRIN, no el de la astilla de VOLCAN (11,4) ni el de la viruta');
 
 const factores = {};
 libro.getSheetByName('Promedios SAP').datos.slice(1)

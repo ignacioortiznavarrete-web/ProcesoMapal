@@ -1,8 +1,13 @@
 /**
  * Agrupa las líneas de SAP en cargas: una carga = un camión = una guía de un
- * proveedor. Una misma guía puede venir en más de una línea (dos posiciones
- * del pedido), y en ese caso las cantidades se suman; si se contara línea por
- * línea, el promedio por carga saldría a la mitad.
+ * proveedor para un material. Una misma guía puede venir en más de una línea
+ * (dos posiciones del pedido), y en ese caso las cantidades se suman; si se
+ * contara línea por línea, el promedio por carga saldría a la mitad.
+ *
+ * El material es parte de la llave porque los números de guía se repiten: la
+ * misma guía de un proveedor puede corresponder a un camión de astilla y a
+ * otro de aserrín, y cruzarlos al revés le daría a cada uno la cantidad del
+ * otro.
  */
 function agruparCargasSap(sap) {
   const cargas = [];
@@ -11,7 +16,7 @@ function agruparCargasSap(sap) {
   sap.filas.forEach(function (fila) {
     if (!fila.desProveedor) return;
     const clave = fila.guia
-      ? claveProveedor(fila.desProveedor) + '|' + fila.guia
+      ? claveCarga(fila.desProveedor, fila.desMaterial, fila.guia)
       : 'SIN GUIA|' + fila.filaHoja;
 
     if (!porClave[clave]) {
@@ -51,6 +56,14 @@ function agruparCargasSap(sap) {
  * La ventana de días se mide desde la fecha más reciente que exista en SAP,
  * no desde hoy, para que un export atrasado no deje el promedio en cero.
  */
+/**
+ * Llave de una carga: proveedor + material + guía. Es la misma fórmula para
+ * las dos puntas del cruce, así que vive en un solo lugar.
+ */
+function claveCarga(proveedor, material, guia) {
+  return claveProveedor(proveedor) + '|' + claveProducto(material) + '|' + guia;
+}
+
 function calcularPromedios(sap) {
   const agrupadas = agruparCargasSap(sap);
   const porProveedorMaterial = {};
@@ -195,16 +208,30 @@ function buscarPorMaterial(mapa, prefijo, claveProd) {
 
   let elegido = '';
 
+  // Exacto primero. 'ASTILLA VERDE' está contenido en 'ASTILLA VERDE CON
+  // CORTEZA' y en 'ASTILLA VERDE OTRA ESPECIE', que rinden 9,4 y 15,8 contra
+  // 11,3: elegir por contención tomaría el material equivocado.
   candidatos.some(function (clave) {
     const claveMat = prefijo ? clave.substring(prefijo.length) : clave;
-
-    if (claveMat && (claveMat.indexOf(claveProd) >= 0 || claveProd.indexOf(claveMat) >= 0)) {
+    if (claveMat === claveProd) {
       elegido = clave;
       return true;
     }
-
     return false;
   });
+
+  if (!elegido) {
+    candidatos.some(function (clave) {
+      const claveMat = prefijo ? clave.substring(prefijo.length) : clave;
+
+      if (claveMat && (claveMat.indexOf(claveProd) >= 0 || claveProd.indexOf(claveMat) >= 0)) {
+        elegido = clave;
+        return true;
+      }
+
+      return false;
+    });
+  }
 
   if (!elegido) {
     let mejor = 0;

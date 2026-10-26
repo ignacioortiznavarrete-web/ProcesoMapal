@@ -57,13 +57,14 @@ function agregarPorProveedor(datos, periodo) {
       agregado.tsSap += fila.ts;
     } else if (fila.estado === ESTADO.SIN_HOMOLOGAR) {
       agregado.camionesSinHomologar++;
-    } else if (fila.estado === ESTADO.SIN_CRUCE) {
-      agregado.camionesSinCruce++;
     } else {
       agregado.camionesPendientes++;
       agregado.tsEstimada += fila.ts;
       if (fila.promedioUsado > 0) agregado.promedioUsado = fila.promedioUsado;
       if (fila.estado === ESTADO.SIN_PROMEDIO) agregado.camionesSinPromedio++;
+      // Estimado igual, pero con cargas de SAP sueltas del mismo proveedor y
+      // material: puede ser el mismo camión con la guía escrita distinta.
+      if (fila.revisarGuia) agregado.camionesRevisarGuia++;
     }
   });
 
@@ -90,15 +91,16 @@ function agregarPorProveedor(datos, periodo) {
   return agregados;
 }
 
-function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
+function nuevoAgregado(producto, proveedorPlan, proveedorSap, materialSap) {
   return {
     producto: producto || '',
+    materialSap: materialSap || '',
     proveedorPlan: proveedorPlan || '',
     proveedorSap: proveedorSap || '',
     camionesPlanilla: 0,
     camionesEnSap: 0,
     camionesPendientes: 0,
-    camionesSinCruce: 0,
+    camionesRevisarGuia: 0,
     camionesSinHomologar: 0,
     camionesSinPromedio: 0,
     camionesSoloSap: 0,
@@ -135,11 +137,15 @@ function obtenerAgregado(agregados, fila) {
     agregados[clave] = nuevoAgregado(
       fila.productoCorto || productoCorto(fila.producto),
       proveedorPlan,
-      fila.proveedorSap
+      fila.proveedorSap,
+      fila.productoSap
     );
   }
   if (!agregados[clave].proveedorSap && fila.proveedorSap) {
     agregados[clave].proveedorSap = fila.proveedorSap;
+  }
+  if (!agregados[clave].materialSap && fila.productoSap) {
+    agregados[clave].materialSap = fila.productoSap;
   }
 
   return agregados[clave];
@@ -163,7 +169,7 @@ function periodoSeleccionado(libro, plan) {
 
 const ENCABEZADOS_CONTROL = [
   'Producto', 'Proveedor (Plan)', 'Proveedor SAP',
-  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Camiones sin cruce',
+  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Camiones a revisar',
   'Cargas sólo SAP', 'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes',
   'TS proyectada', 'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado',
   'SAP hasta', 'Alertas'
@@ -248,7 +254,7 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
     // Si el proveedor no tiene camiones pendientes, se muestra igual su factor
     // TS/carga como referencia.
     const factor = dato.promedioUsado || (dato.proveedorSap
-      ? promedioPara(promedios, dato.proveedorSap, dato.producto).promedio
+      ? promedioPara(promedios, dato.proveedorSap, dato.producto, dato.materialSap).promedio
       : 0);
     // Hasta qué día SAP ya tiene contabilizado a este proveedor: desde ahí en
     // adelante los camiones de la planilla se estiman.
@@ -263,8 +269,9 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
       alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin histórico SAP ' +
         'de este producto: suman 0 TS');
     }
-    if (dato.camionesSinCruce) {
-      alertas.push(dato.camionesSinCruce + ' camión(es) sin cruce en días que SAP ya cubre');
+    if (dato.camionesRevisarGuia) {
+      alertas.push(dato.camionesRevisarGuia + ' camión(es) estimado(s) que ' +
+        'calzan con una carga de SAP sin cruzar: revisar el Nº de guía');
     }
     if (promedioFueraDeRango(factor)) {
       alertas.push('TS/carga fuera de rango (' + redondear(factor, 3) + ')');
@@ -279,7 +286,7 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
       dato.camionesPlanilla,
       dato.camionesEnSap,
       dato.camionesPendientes,
-      dato.camionesSinCruce,
+      dato.camionesRevisarGuia,
       dato.camionesSoloSap,
       redondear(tsReal, 3),
       redondear(factor, 3),

@@ -50,18 +50,17 @@ contar dos veces el mismo camión.
    lectura, nunca se le escribe) y se copia a `Planilla Exportada` en un
    formato único y en orden cronológico, guardando `Hoja origen` y
    `Fila origen` de cada camión.
-2. **Cruce por guía**: para cada camión se busca `proveedor SAP + Nº de guía` en
-   `Ingresos Sap` (sin ceros a la izquierda, sin puntos ni espacios). El
-   proveedor es parte de la llave porque los números de guía se repiten entre
-   proveedores.
+2. **Cruce por guía**: para cada camión se busca `proveedor SAP + material +
+   Nº de guía` en `Ingresos Sap` (sin ceros a la izquierda, sin puntos ni
+   espacios). El proveedor y el material son parte de la llave porque los
+   números de guía se repiten: entre proveedores, y dentro de un mismo
+   proveedor entre materiales.
    - Guía encontrada → **EN SAP**, cantidad real de esa carga.
-   - Guía no encontrada y fecha **posterior** al corte de SAP de ese proveedor
-     → **PENDIENTE**, se valoriza con el promedio `TS/carga` del proveedor
-     (1 camión pendiente × promedio TS/carga).
-   - Guía no encontrada y fecha **ya cubierta** por SAP → **SIN CRUCE**, suma
-     0 TS. Ver "El corte de SAP" más abajo.
+   - Guía no encontrada → **PENDIENTE**, se complementa con la planilla y se
+     valoriza con el promedio `TS/carga` del material (1 camión × promedio).
+     La fecha no interviene; ver "La regla del cruce" más abajo.
 3. **Una carga = un camión = una guía.** Antes de promediar, las líneas de SAP
-   se agrupan por `proveedor + guía`: una misma guía puede venir en dos
+   se agrupan por `proveedor + material + guía`: una misma guía puede venir en dos
    posiciones del pedido y, contada línea por línea, el promedio por carga
    saldría a la mitad. Por eso el camión recibe la suma de sus líneas y el
    factor queda en el rango real (10 a 13 TS por carga en astilla verde). Si
@@ -86,35 +85,53 @@ Una homologación puede tener **sólo el par del Plan** (proveedor que aún no
 tiene movimientos en SAP): sus camiones igual se cuentan y se estiman con el
 promedio general, marcados como `PENDIENTE (proveedor sin historial SAP)`.
 
-## El corte de SAP
+## La regla del cruce
 
-SAP va atrasado, pero no de forma indefinida: para cada proveedor hay una
-**última fecha contabilizada** (`Fecha Contab.` máxima de ese proveedor). Esa
-fecha es la frontera:
+**Proveedor + material + guía, y nada más.**
 
-- **Hasta el corte**, SAP manda: su total real ya incluye todas las cargas de
-  esos días. Un camión de la planilla en ese rango que no cruce por guía
-  **no se estima** — se marca `SIN CRUCE` y suma 0 TS, porque su carga ya está
-  contada en el total real de SAP. Estimarlo contaría dos veces lo mismo (una
-  como estimación y otra como `SOLO SAP`). Lo que hay que revisar ahí es el
-  Nº de guía, y la alerta del control lo dice.
-- **Después del corte** (los días hábiles que SAP todavía no procesó), manda la
-  planilla: cada fila es un camión y se multiplica por el promedio `TS/carga`
-  de su proveedor.
+- La guía está en `Ingresos Sap` → manda SAP, la cantidad es la real.
+- La guía no está → el camión se complementa con la planilla y se valoriza con
+  el promedio TS/carga del material.
 
-El corte es por proveedor, no global: SAP puede estar al 22 con uno y al 16 con
-otro. La columna `SAP hasta` del control muestra el de cada uno, y el
-encabezado muestra el más reciente de todos.
+El material es parte de la llave porque los números de guía se repiten: la
+misma guía de un proveedor puede ser un camión de astilla y otro de aserrín, y
+cruzarlos por la guía sola le daría a cada uno la cantidad del otro. Cuando el
+producto de la planilla todavía no tiene par en SAP no se puede exigir el
+material, y ahí se cae a proveedor + guía: perder un cruce verdadero por un
+nombre sin homologar es peor que el riesgo de pegarle al material vecino.
 
-Un proveedor sin ningún ingreso en SAP no tiene corte, así que todos sus
-camiones se estiman.
+### Por qué ya no hay un corte por fecha
 
-## Período
+Antes había además un corte por proveedor: hasta su última `Fecha Contab.` se
+daba por hecho que SAP ya tenía todo, y un camión sin cruzar en esos días se
+dejaba en **cero** para no contarlo dos veces.
 
-El mes de cada camión se toma de la **fecha de ingreso físico** de la planilla
-manual (`CONFIG.FECHA_BASE = 'PLANILLA'`), porque la fecha de contabilización
-SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
-`'SAP'`. El mes a mostrar se escribe en `Control Ingreso!B2`.
+Ese supuesto era falso. SAP no se carga en orden: las cinco fases van dejando
+huecos hacia atrás, así que "SAP cubre hasta el 22" no significa que tenga
+todo lo anterior. La regla terminaba botando a cero camiones que de verdad
+faltaban, y el mes quedaba corto justo en los proveedores más atrasados.
+
+Lo que esa regla intentaba evitar —contar dos veces un camión cuya guía está
+escrita distinta en cada sistema— ahora es un **aviso**, no un recorte:
+
+- Las cargas de SAP que ningún camión reclamó se emparejan con los camiones
+  que no cruzaron, dentro del mismo proveedor y material, por cercanía de
+  fecha y hasta `CONFIG.DIAS_SOSPECHA_GUIA` días de distancia.
+- Cada carga suelta marca **un** camión, el más probable, y el detalle nombra
+  la guía que SAP tiene sin cruzar: *"SAP tiene sin cruzar la guía 53793 del
+  2026-10-03, mismo proveedor y material: puede ser este camión"*.
+- Nunca se marcan más camiones que cargas sueltas hay. Avisar a todos los
+  pendientes del proveedor por una sola carga suelta dejaría el mes entero
+  marcado, y una marca que está en todas partes no se mira.
+- La cantidad no cambia: el camión se estima igual. Lo que se marca es la
+  sospecha, no una corrección.
+
+Las dos puntas quedan visibles: el camión como `PENDIENTE (estimado)` con su
+marca, y la carga de SAP como `SOLO SAP` con su número de guía. Corregir la
+guía en la planilla hace que las dos se junten en la próxima pasada.
+
+El `SAP hasta` del control sigue mostrando la última fecha contabilizada de
+cada proveedor, pero ahora es sólo información: ya no decide nada.
 
 ## Productos
 
@@ -226,8 +243,8 @@ pasada.
   proyectada, plan, avance %, desvío, precio y monto proyectado. Semáforo en
   avance %. Los proveedores del Plan sin plan ni movimiento no se listan.
 - **`Detalle Camiones`**: camión por camión con su estado (EN SAP, PENDIENTE,
-  PENDIENTE sin historial SAP, SIN HOMOLOGAR, SIN CRUCE, SOLO SAP,
-  GUIA DUPLICADA), su producto, de
+  PENDIENTE sin historial SAP, SIN HOMOLOGAR, SOLO SAP, GUIA DUPLICADA), su
+  producto, la guía de SAP que quedó sin cruzar si hay una que le calce, de
   dónde salió su cantidad y su hoja/fila de origen.
 - **`Promedios SAP`**: el factor usado por proveedor y material.
 

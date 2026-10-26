@@ -15,7 +15,7 @@ es un panel web con el mismo motor de cruce que las hojas: se abre desde **Contr
 Trae la regla del mes, el avance acumulado contra el plan prorrateado por días
 hábiles, el ingreso diario separando lo real de lo estimado, la mezcla por
 producto, el Pareto de proveedores, la tabla proveedor por proveedor con su
-corte de SAP y el detalle camión por camión. La pestaña **Homologación**
+hasta dónde llega SAP y el detalle camión por camión. La pestaña **Homologación**
 permite asignar los nombres sin par desde la misma pantalla.
 
 Los feriados de Chile se **calculan** (`apps-script/Feriados.gs`), no se
@@ -27,12 +27,17 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 - Trae la hoja del **mes en curso** de la planilla manual de ingresos
   (`RECEPCION DIARIA MADERAS`, archivo externo de sólo lectura, con una hoja
   por mes y encabezados irregulares) a la hoja `Planilla Exportada`.
-- Cruza cada camión por Nº de guía contra `Ingresos Sap`.
+- Cruza cada camión contra `Ingresos Sap` por **proveedor + material + guía**.
+  Si esa guía está en SAP, manda SAP; si no está, el camión se complementa con
+  la planilla. La guía manda, no la fecha: SAP no se carga en orden.
 - Los camiones de días que SAP todavía no procesó se valorizan con el promedio
   TS/carga del proveedor (hoja `Promedios SAP`). Una carga es una guía: si el
   pedido vino en varias posiciones, las líneas se suman antes de promediar.
-- El corte es por proveedor: hasta su última fecha contabilizada manda SAP;
-  desde ahí en adelante, la planilla por promedio. El peso bruto nunca se suma.
+- El peso bruto nunca se suma: las TS salen de SAP (real) o del promedio
+  TS/carga del material (estimado).
+- Cuando una carga de SAP queda sin cruzar y hay un camión sin cruzar del mismo
+  proveedor y material en fechas cercanas, los empareja y marca **uno** para
+  revisar el Nº de guía. Avisa; no recorta el mes.
 - Homologa los **nombres de producto** con la hoja `homologacion productos`:
   SAP escribe `VIRUTA-ASERUTA (TS)`, la planilla manual `viruta` y el Plan
   `VIRUTA`. Sin traducirlos, el mismo material abre tres filas distintas y el
@@ -109,6 +114,7 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 | `PROMEDIO_MINIMO_CAMIONES` | mínimo de cargas para confiar en la ventana |
 | `TS_POR_CARGA_MINIMO` / `MAXIMO` | rango esperado por carga; fuera de él se avisa |
 | `FECHA_BASE` | `'PLANILLA'` (fecha de ingreso físico) o `'SAP'` |
+| `DIAS_SOSPECHA_GUIA` | distancia máxima para emparejar una carga suelta de SAP con un camión sin cruzar |
 | `HORAS_ENTRE_ACTUALIZACIONES` | frecuencia del trigger horario (traer + recalcular) |
 | `SEGUNDOS_ESPERA_EDICION` | espera tras la última edición antes de recalcular (mínimo 30) |
 | `UMBRAL_SUGERENCIA` | exigencia para sugerir una homologación |

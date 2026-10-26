@@ -74,6 +74,13 @@ const CONFIG = {
   // que menos de 60 no acelera nada.
   SEGUNDOS_ESPERA_EDICION: 60,
 
+  // Cuando un camión de la planilla no cruza y del mismo proveedor y material
+  // quedó una carga de SAP que nadie reclamó, lo más probable es que sean el
+  // mismo camión con la guía escrita distinta. Se avisa sólo si las fechas no
+  // están más separadas que esto: el desfase entre el ingreso físico y la
+  // contabilización SAP es de días, no de semanas.
+  DIAS_SOSPECHA_GUIA: 15,
+
   // --- Homologación --------------------------------------------------------
   // Puntaje mínimo (0 a 1) para proponer una homologación automática.
   UMBRAL_SUGERENCIA: 0.62,
@@ -168,7 +175,6 @@ const ESTADO = {
   SIN_PROMEDIO: 'PENDIENTE SIN PROMEDIO',
   PRODUCTO_SIN_HOMOLOGAR: 'PRODUCTO SIN HOMOLOGAR',
   SIN_SAP: 'PENDIENTE (proveedor sin historial SAP)',
-  SIN_CRUCE: 'SIN CRUCE (día ya cubierto por SAP)',
   SOLO_SAP: 'SOLO SAP',
   DUPLICADO: 'GUIA DUPLICADA'
 };
