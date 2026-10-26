@@ -55,9 +55,11 @@ contar dos veces el mismo camión.
    proveedor es parte de la llave porque los números de guía se repiten entre
    proveedores.
    - Guía encontrada → **EN SAP**, cantidad real de esa carga.
-   - Guía no encontrada → **PENDIENTE**, se valoriza con el promedio
-     `TS/camión` del proveedor (el "carga × promedio de cantidad de SAP":
-     1 camión pendiente × promedio TS/camión).
+   - Guía no encontrada y fecha **posterior** al corte de SAP de ese proveedor
+     → **PENDIENTE**, se valoriza con el promedio `TS/carga` del proveedor
+     (1 camión pendiente × promedio TS/carga).
+   - Guía no encontrada y fecha **ya cubierta** por SAP → **SIN CRUCE**, suma
+     0 TS. Ver "El corte de SAP" más abajo.
 3. **Una carga = un camión = una guía.** Antes de promediar, las líneas de SAP
    se agrupan por `proveedor + guía`: una misma guía puede venir en dos
    posiciones del pedido y, contada línea por línea, el promedio por carga
@@ -83,6 +85,29 @@ contar dos veces el mismo camión.
 Una homologación puede tener **sólo el par del Plan** (proveedor que aún no
 tiene movimientos en SAP): sus camiones igual se cuentan y se estiman con el
 promedio general, marcados como `PENDIENTE (proveedor sin historial SAP)`.
+
+## El corte de SAP
+
+SAP va atrasado, pero no de forma indefinida: para cada proveedor hay una
+**última fecha contabilizada** (`Fecha Contab.` máxima de ese proveedor). Esa
+fecha es la frontera:
+
+- **Hasta el corte**, SAP manda: su total real ya incluye todas las cargas de
+  esos días. Un camión de la planilla en ese rango que no cruce por guía
+  **no se estima** — se marca `SIN CRUCE` y suma 0 TS, porque su carga ya está
+  contada en el total real de SAP. Estimarlo contaría dos veces lo mismo (una
+  como estimación y otra como `SOLO SAP`). Lo que hay que revisar ahí es el
+  Nº de guía, y la alerta del control lo dice.
+- **Después del corte** (los días hábiles que SAP todavía no procesó), manda la
+  planilla: cada fila es un camión y se multiplica por el promedio `TS/carga`
+  de su proveedor.
+
+El corte es por proveedor, no global: SAP puede estar al 22 con uno y al 16 con
+otro. La columna `SAP hasta` del control muestra el de cada uno, y el
+encabezado muestra el más reciente de todos.
+
+Un proveedor sin ningún ingreso en SAP no tiene corte, así que todos sus
+camiones se estiman.
 
 ## Período
 
@@ -113,7 +138,8 @@ SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
   en `CONFIG.ORIGEN_HOJA`) y volver a importar.
 - El plan está en **TS**, igual que `Cantidad` de SAP.
 - `PESO BRUTO` es peso de romana con camión incluido: se informa como
-  referencia y **no** se usa para estimar.
+  referencia y **nunca** se suma ni se usa para estimar. Las TS salen siempre
+  de SAP (real) o del promedio TS/carga (estimado).
 - Proveedores que aparecen en la planilla pero no están en el Plan (por
   ejemplo `MASISA` en astilla verde) salen listados con la alerta
   "Proveedor sin plan en el mes".

@@ -5,8 +5,12 @@
  *   1. Cada fila de 'Planilla Exportada' es un camión que ingresó físicamente.
  *   2. Si su Nº de guía ya está en 'Ingresos Sap' -> se usa la cantidad real de
  *      esa carga (sumando sus líneas si el pedido vino en varias posiciones).
- *   3. Si todavía no está (desfase de las 5 fases de SAP) -> queda PENDIENTE y
- *      se valoriza con el promedio TS/camión de ese proveedor (ver Promedios.gs).
+ *   3. Si todavía no está y su fecha es POSTERIOR a la última fecha que SAP
+ *      tiene para ese proveedor -> queda PENDIENTE y se valoriza con el
+ *      promedio TS/carga del proveedor (ver Promedios.gs).
+ *      Si la fecha ya está cubierta por SAP, no se estima: SAP manda para esos
+ *      días y el camión se marca SIN CRUCE para revisar la guía. Estimarlo
+ *      sería contar dos veces la misma carga.
  *   4. Las guías que están en SAP y no en la planilla manual se suman como
  *      'SOLO SAP' para no perder cargas antiguas.
  *   5. Todo se agrupa por el proveedor del Plan (vía hoja 'homologacion') y se
@@ -61,6 +65,9 @@ function actualizarControl(periodoSolicitado) {
     } else if (!equivalencia.sap && !equivalencia.plan) {
       estado = ESTADO.SIN_HOMOLOGAR;
       fuente = 'sin homologar';
+    } else if (corteCubre(promedios, equivalencia.sap, fila.fecha)) {
+      estado = ESTADO.SIN_CRUCE;
+      fuente = 'SAP ya cubre este día: revisar el Nº de guía';
     } else {
       const referencia = promedioPara(promedios, equivalencia.sap, fila.producto);
       promedioUsado = referencia.promedio;
@@ -111,6 +118,8 @@ function actualizarControl(periodoSolicitado) {
       agregado.tsSap += cantidad;
     } else if (estado === ESTADO.SIN_HOMOLOGAR) {
       agregado.camionesSinHomologar++;
+    } else if (estado === ESTADO.SIN_CRUCE) {
+      agregado.camionesSinCruce++;
     } else {
       agregado.camionesPendientes++;
       agregado.tsEstimada += cantidad;
@@ -169,6 +178,17 @@ function actualizarControl(periodoSolicitado) {
   };
 }
 
+/**
+ * ¿La fecha del camión ya está dentro de lo que SAP tiene contabilizado para
+ * ese proveedor? Si lo está, su carga ya figura en el total real de SAP.
+ */
+function corteCubre(promedios, proveedorSap, fecha) {
+  if (!proveedorSap || !fecha) return false;
+  const corte = corteSapDe(promedios, proveedorSap);
+  if (!corte) return false;
+  return fecha <= corte;
+}
+
 function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
   return {
     producto: producto || '',
@@ -177,6 +197,7 @@ function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
     camionesPlanilla: 0,
     camionesEnSap: 0,
     camionesPendientes: 0,
+    camionesSinCruce: 0,
     camionesSinHomologar: 0,
     camionesSinPromedio: 0,
     camionesSoloSap: 0,
@@ -228,10 +249,26 @@ function periodoSeleccionado(libro, plan) {
 
 const ENCABEZADOS_CONTROL = [
   'Producto', 'Proveedor (Plan)', 'Proveedor SAP',
-  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Cargas sólo SAP',
-  'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes', 'TS proyectada',
-  'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado', 'Alertas'
+  'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Camiones sin cruce',
+  'Cargas sólo SAP', 'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes',
+  'TS proyectada', 'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado',
+  'SAP hasta', 'Alertas'
 ];
+
+// Posiciones (1 = A) que se usan para fórmulas y formatos.
+const COL_CONTROL = {
+  primeraSuma: 4,     // Camiones planilla
+  ultimaSuma: 13,     // Plan TS
+  factor: 10,         // TS/carga prom.: no se suma
+  proyectada: 12,
+  plan: 13,
+  avance: 14,
+  desvio: 15,
+  precio: 16,
+  monto: 17,
+  corteSap: 18,
+  alertas: 19
+};
 
 function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   const hoja = obtenerHoja(libro, CONFIG.HOJA_CONTROL, true);
@@ -243,17 +280,21 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   hoja.getRange(1, 1).setValue('CONTROL DE INGRESO vs PLAN')
     .setFontWeight('bold').setFontSize(14);
   const productos = (CONFIG.PRODUCTOS_INCLUIDOS || []).join(', ') || '(todos)';
-  hoja.getRange(2, 1, 2, 8).setValues([
+  hoja.getRange(2, 1, 3, 8).setValues([
     ['Período', etiquetaMes(periodo), 'Actualizado', new Date(),
      'Base de fecha', CONFIG.FECHA_BASE, 'Productos', productos],
     ['Planilla origen', propiedades.getProperty('nombreOrigen') || '(sin importar)',
      'Última importación', importacion || '(sin importar)',
      'Promedio', 'ventana ' + (CONFIG.PROMEDIO_VENTANA_DIAS || 0) + ' días',
      'Filas descartadas', planilla.excluidosProducto + ' por producto / ' +
-       planilla.excluidosEstado + ' por estado']
+       planilla.excluidosEstado + ' por estado'],
+    ['SAP cubre hasta', promedios.corteGlobal || '(sin datos)',
+     'Rango por carga', (CONFIG.TS_POR_CARGA_MINIMO || 0) + ' a ' +
+       (CONFIG.TS_POR_CARGA_MAXIMO || 0) + ' TS', '', '', '', '']
   ]);
-  hoja.getRange(2, 1, 2, 1).setFontWeight('bold');
-  hoja.getRange(2, 3, 2, 1).setFontWeight('bold');
+  hoja.getRange(4, 2).setNumberFormat('dd-mm-yyyy');
+  hoja.getRange(2, 1, 3, 1).setFontWeight('bold');
+  hoja.getRange(2, 3, 3, 1).setFontWeight('bold');
   hoja.getRange(2, 5, 2, 1).setFontWeight('bold');
   hoja.getRange(2, 7, 2, 1).setFontWeight('bold');
   hoja.getRange(2, 2).setNote(
@@ -262,7 +303,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   hoja.getRange(2, 4).setNumberFormat('dd-mm-yyyy hh:mm');
   hoja.getRange(3, 4).setNumberFormat('dd-mm-yyyy hh:mm');
 
-  const filaEncabezado = 5;
+  const filaEncabezado = 6;
   hoja.getRange(filaEncabezado, 1, 1, ENCABEZADOS_CONTROL.length)
     .setValues([ENCABEZADOS_CONTROL])
     .setFontWeight('bold').setBackground('#1f3864').setFontColor('#ffffff')
@@ -283,6 +324,9 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
     const factor = dato.promedioUsado || (dato.proveedorSap
       ? promedioPara(promedios, dato.proveedorSap, dato.producto).promedio
       : 0);
+    // Hasta qué día SAP ya tiene contabilizado a este proveedor: desde ahí en
+    // adelante los camiones de la planilla se estiman.
+    const corteSap = corteSapDe(promedios, dato.proveedorSap);
     const tsProyectada = tsReal + dato.tsEstimada;
     const alertas = [];
     if (dato.camionesSinHomologar) {
@@ -290,6 +334,9 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
     }
     if (dato.camionesSinPromedio) {
       alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin promedio SAP');
+    }
+    if (dato.camionesSinCruce) {
+      alertas.push(dato.camionesSinCruce + ' camión(es) sin cruce en días que SAP ya cubre');
     }
     if (promedioFueraDeRango(factor)) {
       alertas.push('TS/carga fuera de rango (' + redondear(factor, 3) + ')');
@@ -304,6 +351,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
       dato.camionesPlanilla,
       dato.camionesEnSap,
       dato.camionesPendientes,
+      dato.camionesSinCruce,
       dato.camionesSoloSap,
       redondear(tsReal, 3),
       redondear(factor, 3),
@@ -314,6 +362,7 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
       redondear(tsProyectada - dato.plan, 3),
       dato.precio === null ? '' : dato.precio,
       dato.precio ? redondear(tsProyectada * dato.precio, 0) : '',
+      corteSap || '',
       alertas.join(' | ')
     ]);
   });
@@ -321,39 +370,54 @@ function escribirHojaControl(libro, agregados, periodo, promedios, planilla) {
   if (filas.length) {
     hoja.getRange(filaEncabezado + 1, 1, filas.length, ENCABEZADOS_CONTROL.length).setValues(filas);
 
-    const filaTotal = filaEncabezado + filas.length + 1;
     const primera = filaEncabezado + 1;
     const ultima = filaEncabezado + filas.length;
-    const total = ['TOTAL', '', ''];
-    for (let columna = 4; columna <= 12; columna++) {
+    const filaTotal = ultima + 1;
+
+    const total = [];
+    for (let columna = 1; columna <= ENCABEZADOS_CONTROL.length; columna++) {
       const letra = columnaLetra(columna);
-      total.push('=SUM(' + letra + primera + ':' + letra + ultima + ')');
+      if (columna === 1) {
+        total.push('TOTAL');
+      } else if (columna === COL_CONTROL.factor) {
+        total.push('');  // el promedio por carga no se suma
+      } else if (columna >= COL_CONTROL.primeraSuma && columna <= COL_CONTROL.ultimaSuma) {
+        total.push('=SUM(' + letra + primera + ':' + letra + ultima + ')');
+      } else if (columna === COL_CONTROL.avance) {
+        total.push('=IFERROR(' + columnaLetra(COL_CONTROL.proyectada) + filaTotal + '/' +
+          columnaLetra(COL_CONTROL.plan) + filaTotal + ',"")');
+      } else if (columna === COL_CONTROL.desvio) {
+        total.push('=' + columnaLetra(COL_CONTROL.proyectada) + filaTotal + '-' +
+          columnaLetra(COL_CONTROL.plan) + filaTotal);
+      } else if (columna === COL_CONTROL.monto) {
+        total.push('=SUM(' + letra + primera + ':' + letra + ultima + ')');
+      } else {
+        total.push('');
+      }
     }
-    total[8] = '';  // el promedio TS/camión no se suma
-    total.push('=IFERROR(K' + filaTotal + '/L' + filaTotal + ',"")');
-    total.push('=K' + filaTotal + '-L' + filaTotal);
-    total.push('');
-    total.push('=SUM(P' + primera + ':P' + ultima + ')');
-    total.push('');
     hoja.getRange(filaTotal, 1, 1, total.length).setValues([total])
       .setFontWeight('bold').setBackground('#d9e1f2');
 
-    hoja.getRange(primera, 8, filas.length + 1, 7).setNumberFormat('#,##0.000');
-    hoja.getRange(primera, 13, filas.length + 1, 1).setNumberFormat('0.0%');
-    hoja.getRange(primera, 15, filas.length + 1, 1).setNumberFormat('#,##0.00');
-    hoja.getRange(primera, 16, filas.length + 1, 1).setNumberFormat('#,##0');
-    aplicarSemaforo(hoja, primera, filas.length + 1);
+    const alto = filas.length + 1;
+    hoja.getRange(primera, COL_CONTROL.primeraSuma, alto, 5).setNumberFormat('#,##0');
+    hoja.getRange(primera, 9, alto, 5).setNumberFormat('#,##0.000');  // TS real a Plan TS
+    hoja.getRange(primera, COL_CONTROL.avance, alto, 1).setNumberFormat('0.0%');
+    hoja.getRange(primera, COL_CONTROL.desvio, alto, 1).setNumberFormat('#,##0.000');
+    hoja.getRange(primera, COL_CONTROL.precio, alto, 1).setNumberFormat('#,##0.00');
+    hoja.getRange(primera, COL_CONTROL.monto, alto, 1).setNumberFormat('#,##0');
+    hoja.getRange(primera, COL_CONTROL.corteSap, alto, 1).setNumberFormat('dd-mm-yyyy');
+    aplicarSemaforo(hoja, primera, alto);
   }
 
   hoja.setFrozenRows(filaEncabezado);
   hoja.autoResizeColumns(1, ENCABEZADOS_CONTROL.length);
   hoja.setColumnWidth(2, 240);
-  hoja.setColumnWidth(17, 280);
+  hoja.setColumnWidth(COL_CONTROL.alertas, 300);
 }
 
 /** Semáforo sobre la columna Avance %. */
 function aplicarSemaforo(hoja, filaInicio, cantidadFilas) {
-  const rango = hoja.getRange(filaInicio, 13, cantidadFilas, 1);
+  const rango = hoja.getRange(filaInicio, COL_CONTROL.avance, cantidadFilas, 1);
   const reglas = [
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberLessThan(0.85).setBackground('#f8cbad').setRanges([rango]).build(),

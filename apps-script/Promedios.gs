@@ -56,6 +56,9 @@ function calcularPromedios(sap) {
   const porProveedorMaterial = {};
   const porProveedor = {};
   const global = nuevoAcumulador();
+  // Hasta qué fecha llega SAP para cada proveedor: es la frontera entre lo que
+  // ya está contabilizado y lo que todavía hay que estimar.
+  const cortePorProveedor = {};
 
   let fechaTope = null;
   agrupadas.cargas.forEach(function (carga) {
@@ -86,6 +89,10 @@ function calcularPromedios(sap) {
       porProveedor[claveProv] = nuevoAcumulador({ proveedor: carga.proveedor, material: '(todos)' });
     }
 
+    if (carga.fecha && (!cortePorProveedor[claveProv] || carga.fecha > cortePorProveedor[claveProv])) {
+      cortePorProveedor[claveProv] = carga.fecha;
+    }
+
     acumular(porProveedorMaterial[claveCombinada], carga, enVentana);
     acumular(porProveedor[claveProv], carga, enVentana);
     acumular(global, carga, enVentana);
@@ -103,7 +110,9 @@ function calcularPromedios(sap) {
     inicioVentana: inicioVentana,
     fechaTope: fechaTope,
     cargas: agrupadas.cargas,
-    porCarga: agrupadas.porClave
+    porCarga: agrupadas.porClave,
+    cortePorProveedor: cortePorProveedor,
+    corteGlobal: fechaTope
   };
 }
 
@@ -259,6 +268,15 @@ function escribirHojaPromedios(libro, promedios) {
   hoja.getRange(2, 7, alto, 2).setNumberFormat('#,##0.000');   // TS histórico y TS/camión
   hoja.getRange(2, 10, alto, 1).setNumberFormat('dd-mm-yyyy'); // última fecha SAP
   hoja.autoResizeColumns(1, encabezados.length);
+}
+
+/**
+ * Hasta qué fecha llega SAP para un proveedor. null = no tiene ningún ingreso
+ * contabilizado, así que todos sus camiones se estiman.
+ */
+function corteSapDe(promedios, proveedorSap) {
+  if (!proveedorSap) return null;
+  return promedios.cortePorProveedor[claveProveedor(proveedorSap)] || null;
 }
 
 /** ¿El factor quedó fuera del rango esperado por carga? */

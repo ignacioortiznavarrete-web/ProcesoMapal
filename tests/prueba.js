@@ -61,7 +61,8 @@ const octubre2026 = [
   [8,'15-10-2026','VIRUTA','MASISA','CABRERO','2029324','GZYL97',25950,'467963','OK','otro producto','','','',''],
   [9,'16-10-2026','ASTILLA VERDE','GUIVAR','TREHUACO','53860','BSZK17',43000,'467964','ANULADO','','','','',''],
   [10,'17-10-2026','ASTILLA VERDE','ENESA','CORONEL','14819','FTYB43',34000,'467965','OK','sin homologar','','','',''],
-  [11,'','','','','','','','','','','','','','']
+  [11,'02-10-2026','ASTILLA VERDE','GUIVAR','TREHUACO','53999','BSZK17',43500,'467966','OK','guía que no cruza, día ya cubierto por SAP','','','',''],
+  [12,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -138,7 +139,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 10, '10 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 11, '11 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -149,7 +150,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 12, '12 camiones importados (sin filas de relleno)');
+assert(importado.filas === 13, '13 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -168,18 +169,25 @@ imprimir('Detalle Camiones', 13);
 // --- Verificaciones sobre el resultado del control ------------------------
 console.log('\n--- control ---');
 const control = libro.getSheetByName('Control Ingreso').datos;
-const encabezado = control[4];
+const encabezado = control[5];
 function filaControl(proveedor) {
-  return control.slice(5).find(f => String(f[1]) === proveedor) || [];
+  return control.slice(6).find(f => String(f[1]) === proveedor) || [];
 }
 function valor(proveedor, columna) {
   return filaControl(proveedor)[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 10, 'se descartan VIRUTA y la fila ANULADO');
+assert(resumen.camionesPlanilla === 11, 'se descartan VIRUTA y la fila ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52, 'GUIVAR: 39 TS reales + 13 TS estimadas');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones sin cruce') === 1,
+  'el camión del 02-10 sin cruce NO se estima: SAP ya cubre ese día');
+assert(String(valor('COMERCIAL GUIVAR LTDA.', 'Alertas')).indexOf('sin cruce') >= 0,
+  'el control avisa del camión sin cruce');
+const corteGuivar = valor('COMERCIAL GUIVAR LTDA.', 'SAP hasta');
+assert(corteGuivar instanceof Date && corteGuivar.getDate() === 3,
+  'el control muestra hasta qué día SAP cubre a cada proveedor (GUIVAR: 03-10)');
 assert(valor('SERVICIOS DE TRANSPORTE VOLCÁN SPA', 'Camiones pendientes') === 1,
   'la guía 53791 de VOLCAN no se cruza con la 53791 de GUIVAR');
 assert(valor('CSC LTDA.', 'Camiones pendientes') === 1,
@@ -203,6 +211,13 @@ assert(guia53792[10] === 'EN SAP', 'la guía 053792 cruza con la 53792 de SAP');
 const guia53791 = detalle.find(f => String(f[6]) === '53791' && f[3] === 'GUIVAR') || [];
 assert(guia53791[11] === 12.777, 'el camión de la guía partida recibe las dos posiciones sumadas');
 assert(String(guia53791[12]).indexOf('2 líneas') > 0, 'el detalle avisa que la carga venía en 2 líneas');
+const sinCruce = detalle.find(f => String(f[6]) === '53999') || [];
+assert(sinCruce[10] === 'SIN CRUCE (día ya cubierto por SAP)', 'queda marcado SIN CRUCE');
+assert(sinCruce[11] === 0, 'el camión sin cruce no suma TS estimadas');
+const pendiente = detalle.find(f => String(f[6]) === '53850') || [];
+assert(pendiente[10] === 'PENDIENTE (estimado)',
+  'el camión posterior al corte de SAP sí se estima');
+
 const septiembre = detalle.find(f => String(f[6]) === '3285') || [];
 assert(String(septiembre[15]) === 'sep-2026', 'el camión de septiembre queda en su mes');
 assert(septiembre[17] === 'SEPTIEMBRE 2026', 'queda registrada la hoja de origen');

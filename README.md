@@ -12,9 +12,11 @@ La explicación del cálculo está en [`docs/ANALISIS.md`](docs/ANALISIS.md).
   (`RECEPCION DIARIA MADERAS`, archivo externo de sólo lectura, con una hoja
   por mes y encabezados irregulares) a la hoja `Planilla Exportada`.
 - Cruza cada camión por Nº de guía contra `Ingresos Sap`.
-- Los camiones que todavía no están en SAP se valorizan con el promedio
+- Los camiones de días que SAP todavía no procesó se valorizan con el promedio
   TS/carga del proveedor (hoja `Promedios SAP`). Una carga es una guía: si el
   pedido vino en varias posiciones, las líneas se suman antes de promediar.
+- El corte es por proveedor: hasta su última fecha contabilizada manda SAP;
+  desde ahí en adelante, la planilla por promedio. El peso bruto nunca se suma.
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
 - Se actualiza solo con un trigger horario.
