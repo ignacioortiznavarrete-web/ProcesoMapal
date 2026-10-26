@@ -35,7 +35,14 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
   desde ahí en adelante, la planilla por promedio. El peso bruto nunca se suma.
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
-- Se actualiza solo con un trigger horario.
+- Controla astilla verde, aserrín, combustible y viruta (`PRODUCTOS_INCLUIDOS`),
+  cada producto en su propia fila: un proveedor que entrega dos productos se
+  compara contra el plan de cada uno, no contra la suma. Una carga nunca se
+  valoriza con el promedio de otro material: si no hay histórico SAP de ese
+  producto queda en 0 TS con el motivo escrito, en vez de inventarle un factor.
+- Se actualiza solo de dos maneras: un trigger horario que trae la planilla
+  externa, y un `onEdit` que recalcula el control cuando alguien completa una
+  fila acá (en `Planilla Exportada`, `homologacion`, `Plan` o `Ingresos Sap`).
 - El cruce vive en `Motor.gs`: las hojas y el panel leen de ahí, así que no
   pueden decir cifras distintas del mismo mes.
 
@@ -64,8 +71,20 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
    - `1. Traer planilla de ingresos`
    - `2. Homologar proveedores...` (confirmar los pares sugeridos)
    - `3. Actualizar control`
-6. `Activar actualización automática` deja corriendo
-   `traer + homologar + recalcular` cada hora (`CONFIG.HORAS_ENTRE_ACTUALIZACIONES`).
+6. `Activar actualización automática` instala los dos disparadores:
+   - **por tiempo**: `traer + homologar + recalcular` cada hora
+     (`CONFIG.HORAS_ENTRE_ACTUALIZACIONES`). Tiene que ser por tiempo, porque
+     los camiones que otra persona escribe en la planilla externa no generan
+     ningún evento en este archivo.
+   - **por edición**: al completar una fila de `Planilla Exportada`,
+     `homologacion`, `Plan` o `Ingresos Sap` se recalcula el control
+     `CONFIG.SEGUNDOS_ESPERA_EDICION` segundos después de la **última**
+     edición. Escribir una fila son varias celdas seguidas: si recalculara en
+     cada una, el control quedaría a medio llenar y se agotaría la cuota. Ese
+     recálculo no vuelve a importar, porque importar pisaría lo recién escrito.
+
+   `Recalcular ahora (ediciones pendientes)` fuerza esa pasada sin esperar, y
+   `Estado del proceso` muestra si hay ediciones sin procesar.
 
 > La planilla origen sólo se lee: el script nunca escribe en ella.
 
@@ -76,13 +95,14 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 | `ORIGEN_ID` | planilla manual de ingresos |
 | `ORIGEN_HOJA` | vacío = la hoja del mes en curso; con nombre = sólo esa |
 | `MESES_A_IMPORTAR` | hojas mensuales a traer desde el mes actual (1 = sólo el mes en curso, 0 = todas) |
-| `PRODUCTOS_INCLUIDOS` | productos a controlar (`['ASTILLA VERDE']`) |
+| `PRODUCTOS_INCLUIDOS` | productos a controlar; `*` al final vale como prefijo (`ASERRIN*` toma `ASERRIN` y `ASERRIN SECO`) |
 | `ESTADOS_EXCLUIDOS` | estados de la planilla que se descartan (ANULADO...) |
 | `PROMEDIO_VENTANA_DIAS` | días del promedio TS/camión (0 = todo el histórico) |
 | `PROMEDIO_MINIMO_CAMIONES` | mínimo de cargas para confiar en la ventana |
 | `TS_POR_CARGA_MINIMO` / `MAXIMO` | rango esperado por carga; fuera de él se avisa |
 | `FECHA_BASE` | `'PLANILLA'` (fecha de ingreso físico) o `'SAP'` |
-| `HORAS_ENTRE_ACTUALIZACIONES` | frecuencia del trigger |
+| `HORAS_ENTRE_ACTUALIZACIONES` | frecuencia del trigger horario (traer + recalcular) |
+| `SEGUNDOS_ESPERA_EDICION` | espera tras la última edición antes de recalcular (mínimo 30) |
 | `UMBRAL_SUGERENCIA` | exigencia para sugerir una homologación |
 
 El mes que muestra el control se escribe en `Control Ingreso!B2`

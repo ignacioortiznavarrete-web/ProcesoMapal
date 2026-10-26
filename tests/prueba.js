@@ -5,7 +5,7 @@
  *
  *   node tests/prueba.js
  */
-const { Hoja, Libro, builderRegla } = require('./stub.js');
+const { Hoja, Libro, builderRegla, propiedades, triggers } = require('./stub.js');
 
 // --- Planilla de control ---------------------------------------------------
 const sap = [
@@ -17,6 +17,8 @@ const sap = [
   ['5022350777','72865','3000039','ASTILLA VERDE (TS)','05-10-2026','4800084631',10,'ASTILLA VERDE (TS) FSC-CW','11,841',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
   ['5022350778','72866','3000039','ASTILLA VERDE (TS)','06-10-2026','4800084631',10,'ASTILLA VERDE (TS) FSC-CW','14,159',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
   ['5022340673','3285','3000039','ASTILLA VERDE (TS)','07-10-2026','4800084654',20,'ASTILLA VERDE (TS)','11,395',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL'],
+  ['5022400001','60575','3000040','VIRUTA (TS)','02-10-2026','4800084900',10,'VIRUTA (TS)','7,500',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400002','60576','3000040','VIRUTA (TS)','03-10-2026','4800084900',10,'VIRUTA (TS)','8,100',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022340999','900','3000039','ASTILLA VERDE (TS)','20-09-2026','4800084654',20,'ASTILLA VERDE (TS)','12,500',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL']
 ];
 
@@ -62,7 +64,9 @@ const octubre2026 = [
   [9,'16-10-2026','ASTILLA VERDE','GUIVAR','TREHUACO','53860','BSZK17',43000,'467964','ANULADO','','','','',''],
   [10,'17-10-2026','ASTILLA VERDE','ENESA','CORONEL','14819','FTYB43',34000,'467965','OK','sin homologar','','','',''],
   [11,'02-10-2026','ASTILLA VERDE','GUIVAR','TREHUACO','53999','BSZK17',43500,'467966','OK','guía que no cruza, día ya cubierto por SAP','','','',''],
-  [12,'','','','','','','','','','','','','','']
+  [12,'02-10-2026','VIRUTA','GUIVAR','TREHUACO','60575','BSZK30',31720,'467967','OK','viruta que sí cruza','','','',''],
+  [13,'12-10-2026','VIRUTA','COLLICURA','SANTA JUANA','76950','FCPJ65',30100,'467968','OK','viruta sin histórico propio','','','',''],
+  [14,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -112,11 +116,11 @@ global.HtmlService = {
 
 // --- Carga del código del proyecto ----------------------------------------
 const fs = require('fs');
-const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Tablero.gs'];
+const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Tablero.gs','Triggers.gs','Menu.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
 // Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
 // ayudante para poder tocar la configuración desde la prueba.
-eval(codigo + '\nglobal.ajustarConfig = function (clave, valor) { CONFIG[clave] = valor; };');
+eval(codigo + '\nglobal.ajustarConfig = function (clave, valor) { CONFIG[clave] = valor; };\nglobal.leerConfig = function (clave) { return CONFIG[clave]; };');
 
 let fallas = 0;
 function assert(cond, mensaje) {
@@ -158,7 +162,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 11, '11 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 13, '13 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -169,7 +173,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 13, '13 camiones importados (sin filas de relleno)');
+assert(importado.filas === 15, '15 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -189,14 +193,18 @@ imprimir('Detalle Camiones', 13);
 console.log('\n--- control ---');
 const control = libro.getSheetByName('Control Ingreso').datos;
 const encabezado = control[5];
-function filaControl(proveedor) {
-  return control.slice(6).find(f => String(f[1]) === proveedor) || [];
+function filaControl(proveedor, producto) {
+  return control.slice(6).find(function (f) {
+    return String(f[1]) === proveedor &&
+      (!producto || String(f[0]) === producto);
+  }) || [];
 }
-function valor(proveedor, columna) {
-  return filaControl(proveedor)[encabezado.indexOf(columna)];
+function valor(proveedor, columna, producto) {
+  return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 11, 'se descartan VIRUTA y la fila ANULADO');
+assert(resumen.camionesPlanilla === 14,
+  'entran astilla y viruta; se descarta sólo la fila ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52, 'GUIVAR: 39 TS reales + 13 TS estimadas');
@@ -243,6 +251,29 @@ assert(septiembre[17] === 'SEPTIEMBRE 2026', 'queda registrada la hoja de origen
 const pesoOctubre = detalle.find(f => String(f[6]) === '53791' && f[3] === 'GUIVAR') || [];
 assert(pesoOctubre[8] === 43.66, 'el peso bruto queda en toneladas (43660 kg -> 43,66 t)');
 
+// El material manda: un camión de viruta no se valoriza con el promedio de
+// la astilla, que pesa casi el doble.
+console.log('\n--- el promedio es por material ---');
+const promediosHoja2 = libro.getSheetByName('Promedios SAP').datos;
+const guivarViruta = promediosHoja2.find(f =>
+  String(f[0]) === 'COMERCIAL GUIVAR LTDA.' && String(f[1]) === 'VIRUTA (TS)') || [];
+assert(guivarViruta[7] === 7.8, 'GUIVAR tiene su propio TS/carga de viruta (7,8)');
+
+const virutaGuivar = detalle.find(f => String(f[6]) === '60575') || [];
+assert(virutaGuivar[10] === 'EN SAP' && virutaGuivar[11] === 7.5,
+  'la viruta que cruza toma su cantidad real');
+
+const virutaCollicura = detalle.find(f => String(f[6]) === '76950') || [];
+assert(virutaCollicura[11] === 7.8,
+  'la viruta de COLLICURA usa el promedio de VIRUTA, no el de su astilla (13)');
+assert(String(virutaCollicura[12]).indexOf('promedio del material') >= 0,
+  'el detalle dice que el promedio salió del material y no del proveedor');
+
+const filaVirutaPlan = control.slice(6).find(f =>
+  String(f[0]) === 'VIRUTA' && String(f[1]).indexOf('FORESTAL COLLICURA') === 0) || [];
+assert(filaVirutaPlan.length > 0,
+  'el control abre una fila aparte por producto: la viruta no se suma a la astilla');
+
 function imprimir(nombre, maxCol) {
   const hoja = libro.getSheetByName(nombre);
   console.log('\n=== ' + nombre + ' ===');
@@ -282,9 +313,10 @@ const panelGuivar = panel.filas.filter(f =>
   f.proveedor === 'COMERCIAL GUIVAR LTDA.' && f.mes === '2026-10');
 assert(panelGuivar.some(f => f.precio === 93),
   'cada fila trae el precio que le fija el Plan');
-assert(panel.fuente.sinHomologar.length === 1 &&
-  panel.fuente.sinHomologar[0].proveedor === 'ENESA',
-  'el panel avisa de los nombres sin par');
+assert(panel.fuente.sinHomologar.length === 2 &&
+  panel.fuente.sinHomologar.some(x => x.proveedor === 'ENESA') &&
+  panel.fuente.sinHomologar.some(x => x.proveedor === 'MASISA'),
+  'el panel avisa de los nombres sin par, en cualquier producto');
 assert(panel.fuente.corteGlobal === '2026-10-07',
   'el panel informa hasta dónde cubre SAP');
 assert(panel.promedios.some(x => x.proveedor === 'COMERCIAL GUIVAR LTDA.' &&
@@ -301,5 +333,62 @@ assert(sinHoja.hojas[0].hoja === 'SEPTIEMBRE 2026', 'se trae la hoja más recien
 assert(sinHoja.aviso.indexOf('oct-2026') >= 0, 'avisa que falta la hoja del mes en curso');
 console.log('aviso: ' + sinHoja.aviso);
 hojaOctubre.nombre = 'OCTUBRE 2026';
+
+// --- Recálculo al editar ---------------------------------------------------
+console.log('\n--- actualización al editar una fila ---');
+
+function edicion(nombreHoja) {
+  return { range: { getSheet: () => ({ getName: () => nombreHoja }) } };
+}
+
+triggers.length = 0;
+delete propiedades.edicionPendiente;
+delete propiedades.edicionMarca;
+
+alEditar(edicion('Control Ingreso'));
+assert(triggers.length === 0 && !propiedades.edicionPendiente,
+  'editar una hoja de resultado no programa nada');
+
+alEditar(edicion('Planilla Exportada'));
+assert(propiedades.edicionPendiente === 'si',
+  'completar una fila de la planilla importada deja el recálculo pendiente');
+assert(triggers.length === 1 && triggers[0].funcion === 'recalcularPendiente' &&
+  triggers[0].detalle === leerConfig('SEGUNDOS_ESPERA_EDICION') * 1000,
+  'se programa un solo recálculo, para después de la espera');
+
+const marcaPrimera = propiedades.edicionMarca;
+alEditar(edicion('Planilla Exportada'));
+alEditar(edicion('homologacion'));
+alEditar(edicion('Plan'));
+assert(triggers.length === 1,
+  'escribir varias celdas seguidas no acumula triggers');
+assert(propiedades.edicionMarca >= marcaPrimera,
+  'cada edición corre la marca: se recalcula tras la última, no tras la primera');
+
+// Un pendiente colgado (el trigger se perdió) se vuelve a programar.
+triggers.length = 0;
+propiedades.edicionMarca = new Date(Date.now() - 30 * 60000).toISOString();
+alEditar(edicion('Planilla Exportada'));
+assert(triggers.length === 1, 'un recálculo que quedó colgado se reprograma');
+
+const resumenEdicion = recalcularPendiente();
+assert(resumenEdicion && resumenEdicion.proveedores > 0,
+  'el recálculo diferido actualiza el control');
+assert(!propiedades.edicionPendiente && triggers.length === 0,
+  'después de recalcular no queda pendiente ni trigger suelto');
+assert(recalcularPendiente() === null,
+  'sin ediciones pendientes el recálculo no vuelve a correr');
+
+triggers.length = 0;
+instalarTrigger();
+assert(triggers.some(t => t.funcion === 'actualizarTodo' && t.tipo === 'horas'),
+  'queda el trigger horario que trae la planilla externa');
+assert(triggers.some(t => t.funcion === 'alEditar' && t.tipo === 'edicion'),
+  'queda el onEdit instalable que recalcula al completar una fila');
+instalarTrigger();
+assert(triggers.filter(t => t.funcion === 'alEditar').length === 1,
+  'reinstalar no duplica el onEdit');
+quitarTrigger();
+assert(triggers.length === 0, 'desactivar deja el archivo sin triggers');
 
 console.log(fallas ? '\n' + fallas + ' prueba(s) con falla' : '\nTodas las pruebas pasaron');

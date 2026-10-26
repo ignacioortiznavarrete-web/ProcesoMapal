@@ -1153,10 +1153,12 @@
         <article class="panel">
           <div class="panel-cab">
             <div>
-              <h2>Proveedor por proveedor</h2>
+              <h2>Proveedor por proveedor, producto por producto</h2>
               <p class="panel-nota">
-                Plan del mes, prorrateo a la fecha, camiones cruzados y pendientes,
-                y hasta qué día SAP tiene cargado a cada uno. Desde ese día en
+                Una fila por producto y proveedor, igual que el Plan: un proveedor
+                que trae astilla y viruta tiene dos compromisos distintos, y
+                sumarlos compararía el total contra el plan de uno solo. La última
+                columna dice hasta qué día SAP lo tiene cargado; desde ahí en
                 adelante sus camiones se estiman.
               </p>
             </div>
@@ -1172,6 +1174,7 @@
               <option value="sobre">Sobre plan</option>
               <option value="sinplan">Sin plan del mes</option>
               <option value="pendientes">Con camiones pendientes</option>
+              <option value="sinpromedio">Sin histórico SAP del producto</option>
             </select>
             <span class="mandos-cuenta" id="cuentaProv" aria-live="polite"></span>
           </div>
@@ -1180,6 +1183,7 @@
             <table data-tabla="prov">
               <thead><tr>
                 <th data-orden="proveedor">Proveedor</th>
+                <th data-orden="producto">Producto</th>
                 <th class="number" data-orden="planMes">Plan mes</th>
                 <th class="number" data-orden="planFecha">Plan a fecha</th>
                 <th class="number" data-orden="camiones">Camiones</th>
@@ -1325,6 +1329,7 @@
     var FILAS = [];
     var METRICAS = null;
     var PROVEEDORES = [];
+    var PARETO = [];
     var VISTA = 'suministro';
     var ORDEN = {
       prov: { campo: 'total', sentido: 'desc' },
@@ -1770,7 +1775,11 @@
       if (!DATA) return;
 
       FILAS = filtrar();
-      PROVEEDORES = porProveedor(FILAS);
+      // Dos agrupaciones distintas a propósito: el plan es por producto y
+      // proveedor —un proveedor que trae astilla y viruta tiene dos
+      // compromisos—, pero la dependencia es por proveedor a secas.
+      PROVEEDORES = porProductoProveedor(FILAS);
+      PARETO = porProveedorSolo(FILAS);
       METRICAS = metricas(FILAS);
 
       dibujarPortada();
@@ -1795,6 +1804,7 @@
       var soloSap = 0;
       var sinCruce = 0;
       var sinHomologar = 0;
+      var sinPromedio = 0;
       var costo = 0;
       var tsConPrecio = 0;
 
@@ -1809,6 +1819,9 @@
           else if (f.fuente === 'ESTIMADO') pendientes++;
           else if (String(f.estado).indexOf('SIN CRUCE') === 0) sinCruce++;
           else if (f.estado === 'SIN HOMOLOGAR') sinHomologar++;
+          else if (String(f.estado).indexOf('PENDIENTE SIN PROMEDIO') === 0) {
+            sinPromedio++;
+          }
         }
 
         if (f.precio !== null && f.precio !== undefined) {
@@ -1829,8 +1842,8 @@
       var ritmo = p.transcurridos > 0 ? total / p.transcurridos : 0;
       var proyeccion = p.seleccionados > 0 ? ritmo * p.seleccionados : total;
 
-      var top3 = PROVEEDORES.slice(0, 3).reduce(function (t, x) { return t + x.parte; }, 0);
-      var top5 = PROVEEDORES.slice(0, 5).reduce(function (t, x) { return t + x.parte; }, 0);
+      var top3 = PARETO.slice(0, 3).reduce(function (t, x) { return t + x.parte; }, 0);
+      var top5 = PARETO.slice(0, 5).reduce(function (t, x) { return t + x.parte; }, 0);
 
       return {
         periodo: p,
@@ -1843,6 +1856,7 @@
         soloSap: soloSap,
         sinCruce: sinCruce,
         sinHomologar: sinHomologar,
+        sinPromedio: sinPromedio,
         planMes: planMes,
         planPeriodo: planPeriodo,
         planFecha: planFecha,
@@ -1860,12 +1874,18 @@
         tsSinPrecio: Math.max(0, total - tsConPrecio),
         top3: top3,
         top5: top5,
-        proveedores: PROVEEDORES.length
+        proveedores: PARETO.length
       };
     }
 
-    /** Un cubo por proveedor, con su plan, su factor y su corte de SAP. */
-    function porProveedor(filas) {
+    /**
+     * Un cubo por producto y proveedor, con su plan, su factor y su corte.
+     *
+     * El producto es parte de la llave porque el Plan también lo es: sumar la
+     * astilla y la viruta de un proveedor en una fila compararía el total
+     * contra el plan de uno solo.
+     */
+    function porProductoProveedor(filas) {
       var p = periodo();
       var cubos = {};
       var cortes = {};
@@ -1874,22 +1894,24 @@
         cortes[clave(c.proveedor)] = c.corte;
       });
 
-      function cubo(nombre) {
-        if (!cubos[nombre]) {
-          cubos[nombre] = {
-            proveedor: nombre, proveedorSap: '', camiones: 0, enSap: 0,
-            pendientes: 0, sinCruce: 0, sinHomologar: 0, soloSap: 0,
+      function cubo(prod, nombre) {
+        var k = clave(prod) + '|' + clave(nombre);
+
+        if (!cubos[k]) {
+          cubos[k] = {
+            producto: prod, proveedor: nombre, proveedorSap: '', camiones: 0,
+            enSap: 0, pendientes: 0, sinCruce: 0, sinHomologar: 0, soloSap: 0,
             tsReal: 0, tsEstimada: 0, total: 0, costo: 0, tsConPrecio: 0,
-            factor: 0, precio: null, planMes: 0, dias: {}, productos: {},
-            ultimo: '', sinPlan: false, corte: ''
+            factor: 0, precio: null, planMes: 0, dias: {}, ultimo: '',
+            sinPlan: false, sinPromedio: 0, corte: ''
           };
         }
 
-        return cubos[nombre];
+        return cubos[k];
       }
 
       filas.forEach(function (f) {
-        var x = cubo(f.proveedor);
+        var x = cubo(producto(f.producto) || '(sin producto)', f.proveedor);
 
         if (!x.proveedorSap && f.proveedorSap) x.proveedorSap = f.proveedorSap;
         if (f.sinPlan) x.sinPlan = true;
@@ -1901,6 +1923,9 @@
           else if (f.fuente === 'ESTIMADO') x.pendientes++;
           else if (String(f.estado).indexOf('SIN CRUCE') === 0) x.sinCruce++;
           else if (f.estado === 'SIN HOMOLOGAR') x.sinHomologar++;
+          else if (String(f.estado).indexOf('PENDIENTE SIN PROMEDIO') === 0) {
+            x.sinPromedio++;
+          }
         }
 
         if (f.fuente === 'SAP') x.tsReal += f.ts;
@@ -1909,6 +1934,7 @@
         x.total = x.tsReal + x.tsEstimada;
 
         if (f.promedioUsado > 0) x.factor = f.promedioUsado;
+
         if (f.precio !== null && f.precio !== undefined) {
           x.precio = f.precio;
           x.tsConPrecio += f.ts;
@@ -1919,8 +1945,6 @@
           x.dias[f.fecha] = (x.dias[f.fecha] || 0) + f.ts;
           if (f.fecha > x.ultimo) x.ultimo = f.fecha;
         }
-
-        if (f.producto) x.productos[producto(f.producto)] = true;
       });
 
       // Un proveedor con plan y sin ingresos también es noticia.
@@ -1928,29 +1952,26 @@
         var cantidad = Number((fila.cantidades || {})[DATA.mes.prefijo]) || 0;
         var prod = document.getElementById('fProducto').value;
         var prov = document.getElementById('fProveedor').value;
+        var corto = producto(fila.producto) || '(sin producto)';
 
         if (prov && fila.proveedor !== prov) return;
-        if (prod && producto(fila.producto) && producto(fila.producto) !== prod) return;
-        if (!cantidad && !cubos[fila.proveedor]) return;
+        if (prod && corto && corto !== prod) return;
+        if (!cantidad && !cubos[clave(corto) + '|' + clave(fila.proveedor)]) return;
 
-        var x = cubo(fila.proveedor);
+        var x = cubo(corto, fila.proveedor);
 
         x.planMes += cantidad;
+
         if (fila.precio !== null && fila.precio !== undefined && x.precio === null) {
           x.precio = fila.precio;
         }
       });
 
-      var granTotal = Object.keys(cubos).reduce(function (t, k) {
-        return t + cubos[k].total;
-      }, 0);
-
       var habilesMes = p.habilesDelMes || 0;
 
-      var lista = Object.keys(cubos).map(function (k) {
+      return Object.keys(cubos).map(function (k) {
         var x = cubos[k];
 
-        x.parte = granTotal > 0 ? x.total / granTotal : 0;
         x.planFecha = p.planComparable && habilesMes
           ? x.planMes * p.transcurridos / habilesMes : 0;
         x.brecha = p.planComparable && x.planMes > 0 ? x.total - x.planFecha : null;
@@ -1958,12 +1979,64 @@
           ? x.total / x.planFecha : null;
         x.corte = cortes[clave(x.proveedorSap)] || '';
         x.diasConIngreso = Object.keys(x.dias).length;
-        x.listaProductos = Object.keys(x.productos).sort();
 
         return x;
       }).filter(function (x) {
         return x.total > 0 || x.camiones > 0 || x.planMes > 0;
       }).sort(function (a, b) { return b.total - a.total; });
+    }
+
+    /** Por proveedor a secas: es la pregunta de la dependencia, no del plan. */
+    function porProveedorSolo(filas) {
+      var cubos = {};
+
+      filas.forEach(function (f) {
+        if (!cubos[f.proveedor]) {
+          cubos[f.proveedor] = {
+            proveedor: f.proveedor, total: 0, tsReal: 0, tsEstimada: 0,
+            camiones: 0, enSap: 0, pendientes: 0, productos: {}, factor: 0,
+            corte: '', ultimo: ''
+          };
+        }
+
+        var x = cubos[f.proveedor];
+
+        if (f.fuente === 'SAP') x.tsReal += f.ts;
+        else if (f.fuente === 'ESTIMADO') x.tsEstimada += f.ts;
+
+        x.total = x.tsReal + x.tsEstimada;
+
+        if (f.estado !== 'SOLO SAP') {
+          x.camiones++;
+          if (f.estado === 'EN SAP') x.enSap++;
+          else if (f.fuente === 'ESTIMADO') x.pendientes++;
+        }
+
+        if (f.promedioUsado > 0) x.factor = f.promedioUsado;
+        if (f.producto) x.productos[producto(f.producto)] = true;
+        if (f.fecha && f.fecha > x.ultimo) x.ultimo = f.fecha;
+      });
+
+      var cortes = {};
+
+      (DATA.fuente.cortes || []).forEach(function (c) {
+        cortes[clave(c.proveedor)] = c.corte;
+      });
+
+      var granTotal = Object.keys(cubos).reduce(function (t, k) {
+        return t + cubos[k].total;
+      }, 0);
+
+      var lista = Object.keys(cubos).map(function (k) {
+        var x = cubos[k];
+
+        x.parte = granTotal > 0 ? x.total / granTotal : 0;
+        x.listaProductos = Object.keys(x.productos).sort();
+        x.corte = cortes[clave(x.proveedor)] || '';
+
+        return x;
+      }).filter(function (x) { return x.total > 0 || x.camiones > 0; })
+        .sort(function (a, b) { return b.total - a.total; });
 
       var acumulado = 0;
 
@@ -2124,13 +2197,16 @@
             : 'Se requieren ' + cant(m.requerido) + ' para llegar al plan'
         },
         {
-          tag: 'Camiones sin cruce', val: entero(m.sinCruce + m.sinHomologar),
-          clase: (m.sinCruce + m.sinHomologar) ? 'val-riesgo' : 'val-verde',
-          pie: m.sinHomologar
-            ? entero(m.sinHomologar) + ' sin homologar · ' + entero(m.sinCruce) +
-              ' en días que SAP ya cubre'
-            : (m.sinCruce ? 'En días que SAP ya cubre: revisar la guía'
-                          : 'Todos los camiones cruzan o se estiman')
+          tag: 'Camiones en cero',
+          val: entero(m.sinCruce + m.sinHomologar + m.sinPromedio),
+          clase: (m.sinCruce + m.sinHomologar + m.sinPromedio)
+            ? 'val-riesgo' : 'val-verde',
+          pie: (m.sinCruce + m.sinHomologar + m.sinPromedio)
+            ? [m.sinHomologar ? entero(m.sinHomologar) + ' sin homologar' : '',
+               m.sinCruce ? entero(m.sinCruce) + ' sin cruce' : '',
+               m.sinPromedio ? entero(m.sinPromedio) + ' sin histórico del producto' : ''
+              ].filter(function (x) { return x; }).join(' · ')
+            : 'Todos los camiones cruzan o se estiman'
         },
         {
           tag: 'Cobertura de precio', val: pct(m.coberturaPrecio),
@@ -2188,6 +2264,13 @@
           valor: entero(m.sinCruce) + ' camiones' });
       }
 
+      if (m.sinPromedio) {
+        lista.push({ nivel: 'mal',
+          texto: 'Hay camiones de un producto que el export de SAP no trae: ' +
+            'suman cero TS hasta que ese material aparezca.',
+          valor: entero(m.sinPromedio) + ' camiones' });
+      }
+
       if (m.coberturaPrecio < 0.95) {
         lista.push({ nivel: 'ojo', texto: 'Hay TS sin precio en el Plan: quedan fuera del monto.',
           valor: cant(m.tsSinPrecio) + ' ' + DATA.unidad });
@@ -2221,7 +2304,7 @@
 
     function dibujarConfianza() {
       var m = METRICAS;
-      var top = PROVEEDORES[0];
+      var top = PARETO[0];
 
       document.getElementById('confianza').innerHTML =
         '<div class="medida"><span>Ingreso cruzado con SAP</span><b>' +
@@ -2857,7 +2940,7 @@
 
     function grafPareto() {
       var caja = document.getElementById('grafPareto');
-      var datos = PROVEEDORES.filter(function (x) { return x.total > 0; }).slice(0, 14);
+      var datos = PARETO.filter(function (x) { return x.total > 0; }).slice(0, 14);
 
       if (!datos.length) {
         caja.innerHTML = vacio('Sin proveedores con ingreso en el rango.');
@@ -2865,7 +2948,7 @@
         return;
       }
 
-      texto('conteoPareto', PROVEEDORES.length + ' proveedores · top ' + datos.length);
+      texto('conteoPareto', PARETO.length + ' proveedores · top ' + datos.length);
 
       var tope = datos[0].total || 1;
       var W = Math.max(360, caja.clientWidth || 520);
@@ -2938,16 +3021,6 @@
 
           if (x.factor > 0) {
             filas.push({ etiqueta: 'TS/carga usado', valor: cant(x.factor) });
-          }
-
-          if (x.planMes > 0) {
-            filas.push({ color: 'var(--pizarra)', etiqueta: 'Plan del mes',
-              valor: ts(x.planMes) });
-          }
-
-          if (x.brecha !== null && x.brecha !== undefined) {
-            filas.push({ etiqueta: 'Contra su plan a la fecha', valor: signo(x.brecha),
-              clase: x.brecha > 0.5 ? 'sube' : (x.brecha < -0.5 ? 'baja' : '') });
           }
 
           return globoHTML({
@@ -3076,19 +3149,20 @@
         if (situacion === 'sobre') return x.brecha !== null && x.brecha > 0;
         if (situacion === 'sinplan') return !x.planMes;
         if (situacion === 'pendientes') return x.pendientes > 0;
+        if (situacion === 'sinpromedio') return x.sinPromedio > 0;
         return true;
       });
 
       lista = ordenar(lista, ORDEN.prov);
       marcarOrden('prov');
 
-      texto('conteoProv', PROVEEDORES.length + ' proveedores · top 3 ' +
-        pct(METRICAS.top3));
+      texto('conteoProv', PROVEEDORES.length + ' filas · ' + PARETO.length +
+        ' proveedores · top 3 ' + pct(METRICAS.top3));
       texto('cuentaProv', lista.length === PROVEEDORES.length ? ''
         : lista.length + ' de ' + PROVEEDORES.length);
 
       if (!lista.length) {
-        cuerpo.innerHTML = '<tr class="fila-vacia"><td colspan="16">' +
+        cuerpo.innerHTML = '<tr class="fila-vacia"><td colspan="17">' +
           (PROVEEDORES.length ? 'Ningún proveedor cumple ese filtro.'
                               : 'Nada que mostrar con estos filtros.') + '</td></tr>';
         pie.innerHTML = '';
@@ -3097,11 +3171,15 @@
 
       cuerpo.innerHTML = lista.map(function (x) {
         return '<tr>' +
-          '<td><span class="puesto">' + x.puesto + '</span> <strong>' +
-            esc(corta(x.proveedor)) + '</strong>' +
+          '<td><strong>' + esc(corta(x.proveedor)) + '</strong>' +
             (x.sinPlan && x.total > 0
               ? ' <span class="sello-fuente es-flojo">sin plan</span>' : '') +
             '</td>' +
+          '<td>' + esc(x.producto) +
+            (x.sinPromedio
+              ? ' <span class="sello-fuente es-flojo">' + entero(x.sinPromedio) +
+                ' sin histórico SAP</span>'
+              : '') + '</td>' +
           celdaN(x.planMes ? cant(x.planMes) : '—') +
           celdaN(x.planFecha ? cant(x.planFecha) : '—') +
           celdaN(entero(x.camiones)) +
@@ -3130,7 +3208,7 @@
         Object.keys(t).forEach(function (k) { t[k] += Number(x[k]) || 0; });
       });
 
-      pie.innerHTML = '<tr><td>TOTAL</td>' +
+      pie.innerHTML = '<tr><td>TOTAL</td><td></td>' +
         celdaN(cant(t.planMes)) + celdaN(cant(t.planFecha)) +
         celdaN(entero(t.camiones)) + celdaN(entero(t.enSap)) +
         celdaN(entero(t.pendientes)) + celdaN(cant(t.tsReal)) +

@@ -34,6 +34,23 @@ function normalizarProveedor(valor) {
   return txt.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * El producto sin la unidad con que SAP lo escribe: 'ASTILLA VERDE (TS)' y
+ * 'ASTILLA VERDE' son el mismo producto, y tienen que caer en la misma fila
+ * del control.
+ */
+function productoCorto(valor) {
+  return String(valor === null || valor === undefined ? '' : valor)
+    .replace(/\s*\((TS|MR|M3|TON|KG)\)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Clave de producto para agrupar. */
+function claveProducto(valor) {
+  return claveProveedor(productoCorto(valor));
+}
+
 /** Clave exacta de proveedor (se usa como llave de los mapas). */
 function claveProveedor(valor) {
   return normalizar(valor).replace(/[^A-Z0-9]/g, '');

@@ -55,6 +55,10 @@ function calcularPromedios(sap) {
   const agrupadas = agruparCargasSap(sap);
   const porProveedorMaterial = {};
   const porProveedor = {};
+  // Por material, juntando a todos los proveedores. Es el respaldo cuando un
+  // proveedor estrena un material: un camión de viruta no pesa lo que uno de
+  // astilla, así que el promedio del proveedor en OTRO material no sirve.
+  const porMaterial = {};
   const global = nuevoAcumulador();
   // Hasta qué fecha llega SAP para cada proveedor: es la frontera entre lo que
   // ya está contabilizado y lo que todavía hay que estimar.
@@ -88,6 +92,13 @@ function calcularPromedios(sap) {
     if (!porProveedor[claveProv]) {
       porProveedor[claveProv] = nuevoAcumulador({ proveedor: carga.proveedor, material: '(todos)' });
     }
+    if (!porMaterial[claveMat]) {
+      porMaterial[claveMat] = nuevoAcumulador({
+        proveedor: '(todos los proveedores)',
+        material: carga.material,
+        codigoMaterial: carga.codigoMaterial
+      });
+    }
 
     if (carga.fecha && (!cortePorProveedor[claveProv] || carga.fecha > cortePorProveedor[claveProv])) {
       cortePorProveedor[claveProv] = carga.fecha;
@@ -95,10 +106,11 @@ function calcularPromedios(sap) {
 
     acumular(porProveedorMaterial[claveCombinada], carga, enVentana);
     acumular(porProveedor[claveProv], carga, enVentana);
+    acumular(porMaterial[claveMat], carga, enVentana);
     acumular(global, carga, enVentana);
   });
 
-  [porProveedorMaterial, porProveedor].forEach(function (mapa) {
+  [porProveedorMaterial, porProveedor, porMaterial].forEach(function (mapa) {
     Object.keys(mapa).forEach(function (clave) { cerrarAcumulador(mapa[clave]); });
   });
   cerrarAcumulador(global);
@@ -106,6 +118,7 @@ function calcularPromedios(sap) {
   return {
     porProveedorMaterial: porProveedorMaterial,
     porProveedor: porProveedor,
+    porMaterial: porMaterial,
     global: global,
     inicioVentana: inicioVentana,
     fechaTope: fechaTope,
@@ -162,73 +175,101 @@ function cerrarAcumulador(acumulador) {
 }
 
 /**
- * Promedio aplicable a un camión pendiente.
- * Busca proveedor + material; si no hay, proveedor; si tampoco, el global.
+ * El registro cuyo material calza con el producto del camión.
+ *
+ * El nombre no es el mismo en las dos planillas: SAP escribe
+ * 'ASTILLA VERDE (TS)' y la planilla 'ASTILLA VERDE', así que se compara por
+ * contención en cualquier dirección y, si eso no alcanza, por parecido.
  */
-function promedioPara(promedios, proveedorSap, producto) {
-  if (!proveedorSap) {
-    return { promedio: promedios.global.promedio, origen: 'promedio general', camiones: promedios.global.camionesHistorico };
-  }
-  const claveProv = claveProveedor(proveedorSap);
-
-  const candidatos = Object.keys(promedios.porProveedorMaterial).filter(function (clave) {
-    return clave.indexOf(claveProv + '|') === 0;
+function buscarPorMaterial(mapa, prefijo, claveProd) {
+  const candidatos = Object.keys(mapa).filter(function (clave) {
+    return !prefijo || clave.indexOf(prefijo) === 0;
   });
 
-  if (candidatos.length && producto) {
-    const claveProd = claveProveedor(producto);
-    let elegido = '';
-    candidatos.some(function (clave) {
-      const claveMat = clave.substring(claveProv.length + 1);
-      if (claveMat && (claveMat.indexOf(claveProd) >= 0 || claveProd.indexOf(claveMat) >= 0)) {
-        elegido = clave;
-        return true;
-      }
-      return false;
-    });
-    if (!elegido) {
-      let mejorPuntaje = 0;
-      candidatos.forEach(function (clave) {
-        const registro = promedios.porProveedorMaterial[clave];
-        const puntaje = similitud(producto, registro.material);
-        if (puntaje > mejorPuntaje && puntaje >= 0.8) {
-          mejorPuntaje = puntaje;
-          elegido = clave;
-        }
-      });
+  if (!candidatos.length) return null;
+
+  // Sin producto escrito no hay con qué elegir: sólo sirve si hay uno solo.
+  if (!claveProd) {
+    return candidatos.length === 1 ? mapa[candidatos[0]] : null;
+  }
+
+  let elegido = '';
+
+  candidatos.some(function (clave) {
+    const claveMat = prefijo ? clave.substring(prefijo.length) : clave;
+
+    if (claveMat && (claveMat.indexOf(claveProd) >= 0 || claveProd.indexOf(claveMat) >= 0)) {
+      elegido = clave;
+      return true;
     }
-    if (elegido) {
-      const registro = promedios.porProveedorMaterial[elegido];
+
+    return false;
+  });
+
+  if (!elegido) {
+    let mejor = 0;
+
+    candidatos.forEach(function (clave) {
+      const puntaje = similitud(claveProd, claveProveedor(mapa[clave].material));
+
+      if (puntaje > mejor && puntaje >= 0.8) {
+        mejor = puntaje;
+        elegido = clave;
+      }
+    });
+  }
+
+  return elegido ? mapa[elegido] : null;
+}
+
+/**
+ * Promedio aplicable a un camión pendiente.
+ *
+ * El material manda. Antes se caía al promedio del proveedor en cualquier
+ * material y, si no, al general: con un solo material eso daba lo mismo, pero
+ * al entrar viruta, aserrín y combustible pasaría a valorizar un camión de
+ * viruta con el promedio de la astilla, que pesa bastante más. El error no se
+ * vería en ninguna parte.
+ *
+ * Así que: proveedor + material, o el mismo material de los demás proveedores,
+ * o nada. Un cero con el motivo escrito es mejor que una cifra inventada.
+ */
+function promedioPara(promedios, proveedorSap, producto) {
+  const claveProd = claveProducto(producto);
+
+  if (proveedorSap) {
+    const propio = buscarPorMaterial(
+      promedios.porProveedorMaterial,
+      claveProveedor(proveedorSap) + '|',
+      claveProd
+    );
+
+    if (propio && propio.promedio > 0) {
       return {
-        promedio: registro.promedio,
-        origen: 'proveedor + material (' + registro.base + ')',
-        camiones: registro.camionesVentana || registro.camionesHistorico
+        promedio: propio.promedio,
+        origen: 'proveedor + material (' + propio.base + ')',
+        camiones: propio.camionesVentana || propio.camionesHistorico
       };
     }
   }
 
-  if (candidatos.length === 1) {
-    const unico = promedios.porProveedorMaterial[candidatos[0]];
-    return {
-      promedio: unico.promedio,
-      origen: 'proveedor + material (' + unico.base + ')',
-      camiones: unico.camionesVentana || unico.camionesHistorico
-    };
-  }
+  const delMaterial = buscarPorMaterial(promedios.porMaterial, '', claveProd);
 
-  const registroProveedor = promedios.porProveedor[claveProv];
-  if (registroProveedor && registroProveedor.promedio > 0) {
+  if (delMaterial && delMaterial.promedio > 0) {
     return {
-      promedio: registroProveedor.promedio,
-      origen: 'proveedor (' + registroProveedor.base + ')',
-      camiones: registroProveedor.camionesVentana || registroProveedor.camionesHistorico
+      promedio: delMaterial.promedio,
+      origen: 'promedio del material (' + delMaterial.base + '), sin historial ' +
+        'de este proveedor',
+      camiones: delMaterial.camionesVentana || delMaterial.camionesHistorico
     };
   }
 
   return {
-    promedio: promedios.global.promedio,
-    origen: 'promedio general',
-    camiones: promedios.global.camionesHistorico
+    promedio: 0,
+    origen: productoCorto(producto)
+      ? 'sin histórico SAP de ' + productoCorto(producto)
+      : 'sin producto escrito en la planilla',
+    camiones: 0
   };
 }
 
@@ -246,6 +287,9 @@ function escribirHojaPromedios(libro, promedios) {
   const filas = [];
   Object.keys(promedios.porProveedorMaterial).sort().forEach(function (clave) {
     filas.push(filaPromedio(promedios.porProveedorMaterial[clave]));
+  });
+  Object.keys(promedios.porMaterial).sort().forEach(function (clave) {
+    filas.push(filaPromedio(promedios.porMaterial[clave]));
   });
   Object.keys(promedios.porProveedor).sort().forEach(function (clave) {
     filas.push(filaPromedio(promedios.porProveedor[clave]));

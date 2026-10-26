@@ -116,14 +116,67 @@ manual (`CONFIG.FECHA_BASE = 'PLANILLA'`), porque la fecha de contabilización
 SAP está desfasada y movería cargas de un mes a otro. Se puede cambiar a
 `'SAP'`. El mes a mostrar se escribe en `Control Ingreso!B2`.
 
+## Productos
+
+Se controlan `ASTILLA VERDE`, `ASERRIN*`, `COMBUSTIBLE` y `VIRUTA`
+(`CONFIG.PRODUCTOS_INCLUIDOS`; el `*` final vale como prefijo, así `ASERRIN*`
+toma también `ASERRIN SECO`). Cada producto lleva su propia fila de control:
+si un proveedor entrega astilla y viruta, cada una se compara contra su plan,
+nunca una suma de las dos.
+
+El promedio TS/carga también es por material, y en ese orden:
+
+1. el histórico SAP de **ese proveedor en ese material**;
+2. si no tiene, el promedio de **ese material** en todos los proveedores;
+3. si tampoco hay, **0 TS** con el motivo escrito en el detalle.
+
+El paso 3 es deliberado: valorizar un camión de viruta con el factor de la
+astilla del mismo proveedor (13 TS vs. 7,8) infla el avance sin que nadie lo
+note. Es mejor que el camión quede visible en 0 con la alerta
+"sin histórico SAP de \<producto\>" hasta que el export de SAP traiga el
+material.
+
+> Hoy el export de `Ingresos Sap` sólo tiene astilla verde (material
+> `3000039`). Mientras no incluya viruta, aserrín y combustible, esos camiones
+> van a quedar en `PENDIENTE sin historial SAP` con 0 TS, y el `Plan` tampoco
+> tiene filas para ellos (salen con "sin plan").
+
+## Actualización automática
+
+Dos disparadores, porque resuelven cosas distintas:
+
+| | Qué corre | Cuándo |
+|---|---|---|
+| **Tiempo** (`actualizarTodo`) | importar + homologar + recalcular | cada `HORAS_ENTRE_ACTUALIZACIONES` |
+| **Edición** (`alEditar` → `recalcularPendiente`) | homologar + recalcular | `SEGUNDOS_ESPERA_EDICION` después de la última edición |
+
+El de tiempo no se puede reemplazar por el de edición: la planilla de
+recepción es un **archivo externo**, y los camiones que otra persona escribe
+allá no generan ningún evento en este archivo.
+
+El de edición es un `onEdit` **instalable** (el simple no puede programar
+triggers ni tomar el candado del documento) y está amortiguado: completar una
+fila son varias celdas seguidas, así que `alEditar` sólo marca que hay trabajo
+pendiente y corre la marca de tiempo; un único trigger diferido hace el
+recálculo cuando la persona ya dejó de escribir. Ese recálculo **no vuelve a
+importar**, porque importar sobrescribiría la fila recién escrita.
+
+Dos detalles que evitan que quede colgado: si el recálculo encuentra el candado
+tomado (hay una actualización horaria en curso) se reprograma en vez de perder
+las ediciones, y si una marca pendiente lleva más de 10 minutos sin resolverse
+se da por vencida y la siguiente edición vuelve a programar. `Estado del
+proceso` muestra si hay ediciones sin procesar, y `Recalcular ahora` fuerza la
+pasada.
+
 ## Salidas
 
-- **`Control Ingreso`**: una fila por proveedor con camiones (planilla / en SAP
+- **`Control Ingreso`**: una fila por **producto + proveedor** con camiones (planilla / en SAP
   / pendientes / sólo SAP), TS real, factor TS/camión, TS estimada, TS
   proyectada, plan, avance %, desvío, precio y monto proyectado. Semáforo en
   avance %. Los proveedores del Plan sin plan ni movimiento no se listan.
 - **`Detalle Camiones`**: camión por camión con su estado (EN SAP, PENDIENTE,
-  PENDIENTE sin historial SAP, SIN HOMOLOGAR, SOLO SAP, GUIA DUPLICADA), de
+  PENDIENTE sin historial SAP, SIN HOMOLOGAR, SIN CRUCE, SOLO SAP,
+  GUIA DUPLICADA), su producto, de
   dónde salió su cantidad y su hoja/fila de origen.
 - **`Promedios SAP`**: el factor usado por proveedor y material.
 

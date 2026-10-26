@@ -13,6 +13,8 @@ function onOpen() {
     .addItem('Actualizar todo (traer + control)', 'accionActualizarTodo')
     .addItem('Detectar proveedores nuevos', 'accionSincronizarHomologacion')
     .addSeparator()
+    .addItem('Recalcular ahora (ediciones pendientes)', 'accionRecalcularPendiente')
+    .addSeparator()
     .addItem('Activar actualización automática', 'accionInstalarTrigger')
     .addItem('Desactivar actualización automática', 'accionQuitarTrigger')
     .addItem('Estado del proceso', 'accionEstado')
@@ -30,7 +32,11 @@ function actualizarTodo() {
     const importacion = importarPlanillaOrigen();
     sincronizarHomologacion();
     const resumen = actualizarControl();
-    PropertiesService.getDocumentProperties().setProperty('ultimaActualizacion', new Date().toISOString());
+    const propiedades = PropertiesService.getDocumentProperties();
+    propiedades.setProperty('ultimaActualizacion', new Date().toISOString());
+    // Esta pasada ya incluye lo que se editó a mano: no queda nada pendiente.
+    propiedades.deleteProperty(PROP_EDICION_PENDIENTE);
+    propiedades.deleteProperty(PROP_EDICION_MARCA);
     return { importacion: importacion, control: resumen };
   } finally {
     candado.releaseLock();
@@ -143,16 +149,39 @@ function accionVerificar() {
   }
 }
 
+/** Fuerza el recálculo diferido sin esperar los segundos de espera. */
+function accionRecalcularPendiente() {
+  try {
+    const propiedades = PropertiesService.getDocumentProperties();
+    if (propiedades.getProperty(PROP_EDICION_PENDIENTE) !== 'si') {
+      SpreadsheetApp.getUi().alert('No hay ediciones pendientes. El control ya está al día.');
+      return;
+    }
+    const resumen = recalcularPendiente();
+    SpreadsheetApp.getUi().alert(resumen
+      ? 'Control recalculado para ' + etiquetaMes(resumen.periodo) + '.'
+      : 'Hay otra actualización en curso; el recálculo quedó reprogramado.');
+  } catch (error) {
+    SpreadsheetApp.getUi().alert('No se pudo recalcular:\n\n' + error.message);
+  }
+}
+
 function accionEstado() {
   const propiedades = PropertiesService.getDocumentProperties();
   const trigger = triggerActual();
+  const triggerEdicion = triggerEdicionActual();
   const mensaje = [
     'Planilla origen: ' + (propiedades.getProperty('nombreOrigen') || '(sin importar aún)'),
     'Hoja origen: ' + (propiedades.getProperty('hojaOrigen') || '-'),
     'Camiones importados: ' + (propiedades.getProperty('filasImportadas') || '0'),
     'Última importación: ' + (propiedades.getProperty('ultimaImportacion') || '-'),
     'Última actualización: ' + (propiedades.getProperty('ultimaActualizacion') || '-'),
-    'Actualización automática: ' + (trigger ? 'activa cada ' + CONFIG.HORAS_ENTRE_ACTUALIZACIONES + ' h' : 'desactivada')
+    'Actualización automática: ' + (trigger ? 'activa cada ' + CONFIG.HORAS_ENTRE_ACTUALIZACIONES + ' h' : 'desactivada'),
+    'Recálculo al editar: ' + (triggerEdicion
+      ? 'activo, ' + CONFIG.SEGUNDOS_ESPERA_EDICION + ' s después de la última edición'
+      : 'desactivado'),
+    'Ediciones pendientes: ' + (propiedades.getProperty(PROP_EDICION_PENDIENTE) === 'si' ? 'sí' : 'no'),
+    'Último recálculo por edición: ' + (propiedades.getProperty('ultimoRecalculoEdicion') || '-')
   ].join('\n');
   SpreadsheetApp.getUi().alert(mensaje);
 }

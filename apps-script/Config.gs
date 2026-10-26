@@ -5,7 +5,7 @@
  * no debería necesitar cambios al agregar proveedores, meses o materiales.
  */
 // Versión del código, para confirmar qué está pegado en el proyecto.
-const VERSION = '2026-10-23';
+const VERSION = '2026-10-26';
 
 const CONFIG = {
   // --- Planilla origen (la planilla manual que NO se puede editar) ---------
@@ -21,8 +21,12 @@ const CONFIG = {
 
   // --- Filtros de la planilla manual --------------------------------------
   // Productos a controlar, tal como se escriben en la columna PRODUCTO.
-  // Lista vacía = todos. Un nombre terminado en '*' funciona como prefijo.
-  PRODUCTOS_INCLUIDOS: ['ASTILLA VERDE'],
+  // Lista vacía = todos. Un nombre terminado en '*' funciona como prefijo,
+  // así 'ASERRIN*' toma también 'ASERRIN viruta'.
+  //
+  // Quedan fuera a propósito 'ASTILLA SECA' y 'ASTILLA VERDE C/CORTEZA':
+  // agrégalos acá cuando haya que controlarlos.
+  PRODUCTOS_INCLUIDOS: ['ASTILLA VERDE', 'ASERRIN*', 'COMBUSTIBLE', 'VIRUTA'],
   // Filas con estos valores en la columna ESTADO se descartan.
   ESTADOS_EXCLUIDOS: ['ANULADO', 'ANULADA', 'NULO', 'NULA', 'RECHAZADO', 'RECHAZADA'],
 
@@ -60,6 +64,14 @@ const CONFIG = {
 
   // --- Actualización automática -------------------------------------------
   HORAS_ENTRE_ACTUALIZACIONES: 1,
+
+  // Al editar a mano 'Planilla Exportada', 'homologacion' o 'Plan', el control
+  // se recalcula solo. No al instante: escribir veinte filas dispararía veinte
+  // recálculos. Se espera a que la mano pare.
+  //
+  // Google redondea los disparadores de una vez a la baja hasta un minuto, así
+  // que menos de 60 no acelera nada.
+  SEGUNDOS_ESPERA_EDICION: 60,
 
   // --- Homologación --------------------------------------------------------
   // Puntaje mínimo (0 a 1) para proponer una homologación automática.

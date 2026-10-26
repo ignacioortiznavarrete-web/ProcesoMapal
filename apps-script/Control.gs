@@ -29,7 +29,13 @@ function actualizarControl(periodoSolicitado) {
   };
 }
 
-/** Agrupa las filas del período por proveedor del Plan. */
+/**
+ * Agrupa las filas del período por producto y proveedor del Plan.
+ *
+ * El producto es parte de la llave porque el Plan también lo es: un proveedor
+ * que trae astilla y viruta tiene dos compromisos distintos, y sumarlos en una
+ * fila compararía el total contra el plan de uno solo.
+ */
 function agregarPorProveedor(datos, periodo) {
   const agregados = {};
 
@@ -64,10 +70,13 @@ function agregarPorProveedor(datos, periodo) {
   // Filas del Plan sin movimiento: un proveedor con plan y sin ingresos
   // también es noticia.
   datos.plan.filas.forEach(function (filaPlan) {
-    const clave = 'PLAN|' + claveProveedor(filaPlan.proveedor);
+    const clave = 'PLAN|' + claveProducto(filaPlan.producto) + '|' +
+      claveProveedor(filaPlan.proveedor);
 
     if (!agregados[clave]) {
-      agregados[clave] = nuevoAgregado(filaPlan.producto, filaPlan.proveedor, '');
+      agregados[clave] = nuevoAgregado(
+        productoCorto(filaPlan.producto), filaPlan.proveedor, ''
+      );
     }
 
     const agregado = agregados[clave];
@@ -76,7 +85,6 @@ function agregarPorProveedor(datos, periodo) {
     if (filaPlan.precio !== null && filaPlan.precio !== undefined) {
       agregado.precio = filaPlan.precio;
     }
-    if (filaPlan.producto) agregado.producto = filaPlan.producto;
   });
 
   return agregados;
@@ -105,22 +113,27 @@ function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
 
 /** Agrupa por proveedor del Plan; si no hay, por el de SAP; si no, el manual. */
 function obtenerAgregado(agregados, fila) {
+  const producto = claveProducto(fila.producto);
   let clave;
   let proveedorPlan;
 
   if (fila.proveedorPlan) {
-    clave = 'PLAN|' + claveProveedor(fila.proveedorPlan);
+    clave = 'PLAN|' + producto + '|' + claveProveedor(fila.proveedorPlan);
     proveedorPlan = fila.proveedorPlan;
   } else if (fila.proveedorSap) {
-    clave = 'SAP|' + claveProveedor(fila.proveedorSap);
+    clave = 'SAP|' + producto + '|' + claveProveedor(fila.proveedorSap);
     proveedorPlan = fila.proveedorSap + ' (sin par en Plan)';
   } else {
-    clave = 'MANUAL|' + claveProveedor(fila.proveedorPlanilla);
+    clave = 'MANUAL|' + producto + '|' + claveProveedor(fila.proveedorPlanilla);
     proveedorPlan = fila.proveedorPlanilla + ' (sin homologar)';
   }
 
   if (!agregados[clave]) {
-    agregados[clave] = nuevoAgregado(fila.producto, proveedorPlan, fila.proveedorSap);
+    agregados[clave] = nuevoAgregado(
+      fila.productoCorto || productoCorto(fila.producto),
+      proveedorPlan,
+      fila.proveedorSap
+    );
   }
   if (!agregados[clave].proveedorSap && fila.proveedorSap) {
     agregados[clave].proveedorSap = fila.proveedorSap;
@@ -216,7 +229,11 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
   const filas = [];
 
   Object.keys(agregados).sort(function (a, b) {
-    return agregados[a].proveedorPlan.localeCompare(agregados[b].proveedorPlan);
+    const porProducto = agregados[a].producto.localeCompare(agregados[b].producto);
+
+    return porProducto !== 0
+      ? porProducto
+      : agregados[a].proveedorPlan.localeCompare(agregados[b].proveedorPlan);
   }).forEach(function (clave) {
     const dato = agregados[clave];
     const sinMovimiento = !dato.camionesPlanilla && !dato.camionesSoloSap &&
@@ -240,7 +257,8 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
       alertas.push(dato.camionesSinHomologar + ' camión(es) sin homologar');
     }
     if (dato.camionesSinPromedio) {
-      alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin promedio SAP');
+      alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin histórico SAP ' +
+        'de este producto: suman 0 TS');
     }
     if (dato.camionesSinCruce) {
       alertas.push(dato.camionesSinCruce + ' camión(es) sin cruce en días que SAP ya cubre');

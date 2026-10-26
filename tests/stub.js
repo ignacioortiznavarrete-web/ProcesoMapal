@@ -63,11 +63,40 @@ global.PropertiesService = {
   getDocumentProperties: () => ({
     getProperty: k => (k in propiedades ? propiedades[k] : null),
     setProperty: (k, v) => { propiedades[k] = v; },
-    setProperties: o => Object.assign(propiedades, o)
+    setProperties: o => Object.assign(propiedades, o),
+    deleteProperty: k => { delete propiedades[k]; }
   })
 };
 global.HtmlService = { createHtmlOutputFromFile: () => ({ setWidth: () => ({ setHeight: () => ({}) }) }) };
-global.ScriptApp = { getProjectTriggers: () => [] };
+// Registro de triggers: las pruebas necesitan ver cuántos se crearon y de qué
+// tipo, porque el recálculo diferido se apoya justamente en eso.
+const triggers = [];
+function nuevoTrigger(funcion) {
+  const trigger = {
+    funcion: funcion,
+    tipo: '',
+    detalle: null,
+    getHandlerFunction: () => funcion
+  };
+  const builder = {
+    timeBased: () => builder,
+    after: ms => { trigger.tipo = 'after'; trigger.detalle = ms; return builder; },
+    everyHours: h => { trigger.tipo = 'horas'; trigger.detalle = h; return builder; },
+    forSpreadsheet: () => builder,
+    onEdit: () => { trigger.tipo = 'edicion'; return builder; },
+    create: () => { triggers.push(trigger); return trigger; }
+  };
+  return builder;
+}
+global.ScriptApp = {
+  getProjectTriggers: () => triggers.slice(),
+  newTrigger: nuevoTrigger,
+  deleteTrigger: t => {
+    const i = triggers.indexOf(t);
+    if (i >= 0) triggers.splice(i, 1);
+  }
+};
+global.Logger = { log: () => {} };
 global.LockService = { getDocumentLock: () => ({ tryLock: () => true, releaseLock() {} }) };
 
-module.exports = { Hoja, Libro, builderRegla, propiedades };
+module.exports = { Hoja, Libro, builderRegla, propiedades, triggers };
