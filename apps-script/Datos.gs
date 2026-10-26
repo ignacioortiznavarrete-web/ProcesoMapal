@@ -70,6 +70,9 @@ function cargarPlanilla(libro) {
   const filas = [];
   const proveedores = {};
   const productos = {};
+  // La tabla de productos se consulta antes de descartar por producto, para que
+  // una variante escrita a mano se pueda rescatar homologándola.
+  const tablaProductos = cargarHomologacionProductos(libro);
   let excluidosProducto = 0;
   let excluidosEstado = 0;
 
@@ -84,7 +87,7 @@ function cargarPlanilla(libro) {
     const estado = col.estado >= 0 ? comoTexto(fila[col.estado]) : '';
     if (producto) productos[producto] = true;
 
-    if (!productoIncluido(producto)) { excluidosProducto++; continue; }
+    if (!productoIncluido(producto, tablaProductos)) { excluidosProducto++; continue; }
     if (estadoExcluido(estado)) { excluidosEstado++; continue; }
 
     filas.push({
@@ -117,10 +120,28 @@ function cargarPlanilla(libro) {
 }
 
 /** ¿El producto está en CONFIG.PRODUCTOS_INCLUIDOS? (lista vacía = todos). */
-function productoIncluido(producto) {
+function productoIncluido(producto, tablaProductos) {
+  if (coincideProductoIncluido(producto)) return true;
+
+  // Un nombre escrito distinto ('VIRUTILLA' por viruta) se traduce antes de
+  // descartarlo: si no, la tabla de homologación nunca podría rescatar una
+  // variante escrita a mano, que es justo para lo que existe.
+  if (tablaProductos) {
+    const registro = tablaProductos.porPlanilla[claveProducto(producto)];
+    if (registro) {
+      return coincideProductoIncluido(registro.plan) ||
+        coincideProductoIncluido(registro.sap);
+    }
+  }
+
+  return false;
+}
+
+function coincideProductoIncluido(producto) {
   const lista = CONFIG.PRODUCTOS_INCLUIDOS || [];
   if (!lista.length) return true;
-  const clave = normalizar(producto);
+  const clave = normalizar(productoCorto(producto));
+  if (!clave) return false;
   return lista.some(function (incluido) {
     const patron = normalizar(incluido);
     if (!patron) return false;
@@ -146,7 +167,7 @@ function estadoExcluido(estado) {
  */
 function cargarPlan(libro) {
   const datos = leerHoja(libro, CONFIG.HOJA_PLAN);
-  if (datos.length < 2) return { filas: [], proveedores: [], meses: [] };
+  if (datos.length < 2) return { filas: [], proveedores: [], productos: [], meses: [] };
 
   const encabezados = datos[0];
   const col = ubicarColumnas(encabezados, COLUMNAS.PLAN);
@@ -169,6 +190,7 @@ function cargarPlan(libro) {
 
   const filas = [];
   const proveedores = {};
+  const productos = {};
   let productoActual = '';
 
   for (let i = 1; i < datos.length; i++) {
@@ -193,11 +215,13 @@ function cargarPlan(libro) {
       cantidades: cantidades
     });
     proveedores[proveedor] = true;
+    if (productoActual) productos[productoActual] = true;
   }
 
   return {
     filas: filas,
     proveedores: Object.keys(proveedores).sort(),
+    productos: Object.keys(productos).sort(),
     meses: meses
   };
 }
@@ -227,4 +251,54 @@ function cargarHomologacion(libro) {
     if (sap) porSap[claveProveedor(sap)] = registro;
   }
   return { porPlanilla: porPlanilla, porSap: porSap, filas: filas };
+}
+
+/**
+ * Tabla de homologación de productos: el mismo material escrito como lo
+ * escribe SAP, como lo escribe la mano en la planilla y como lo nombra el Plan.
+ *
+ * Arranca con CONFIG.PRODUCTOS_EQUIVALENTES para que el cruce funcione sin que
+ * nadie haya llenado nada, y la hoja pisa esos valores: lo que se escribe a
+ * mano manda.
+ */
+function cargarHomologacionProductos(libro) {
+  const porPlanilla = {};
+  const porSap = {};
+  const porPlan = {};
+  const filas = [];
+
+  function registrar(registro) {
+    if (!registro.sap && !registro.planilla && !registro.plan) return;
+    filas.push(registro);
+    if (registro.planilla) porPlanilla[claveProducto(registro.planilla)] = registro;
+    if (registro.sap) porSap[claveProducto(registro.sap)] = registro;
+    if (registro.plan) porPlan[claveProducto(registro.plan)] = registro;
+  }
+
+  (CONFIG.PRODUCTOS_EQUIVALENTES || []).forEach(function (equivalencia) {
+    registrar({
+      filaHoja: 0,
+      sap: comoTexto(equivalencia.sap),
+      planilla: comoTexto(equivalencia.planilla),
+      plan: comoTexto(equivalencia.plan),
+      deConfig: true
+    });
+  });
+
+  const datos = leerHoja(libro, CONFIG.HOJA_HOMOLOGACION_PRODUCTOS);
+  if (datos.length >= 2) {
+    const col = ubicarColumnas(datos[0], COLUMNAS.HOMOLOGACION_PRODUCTOS);
+    for (let i = 1; i < datos.length; i++) {
+      const fila = datos[i];
+      registrar({
+        filaHoja: i + 1,
+        sap: col.sap >= 0 ? comoTexto(fila[col.sap]) : '',
+        planilla: col.planilla >= 0 ? comoTexto(fila[col.planilla]) : '',
+        plan: col.plan >= 0 ? comoTexto(fila[col.plan]) : '',
+        deConfig: false
+      });
+    }
+  }
+
+  return { porPlanilla: porPlanilla, porSap: porSap, porPlan: porPlan, filas: filas };
 }

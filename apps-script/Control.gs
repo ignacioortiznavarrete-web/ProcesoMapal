@@ -113,7 +113,10 @@ function nuevoAgregado(producto, proveedorPlan, proveedorSap) {
 
 /** Agrupa por proveedor del Plan; si no hay, por el de SAP; si no, el manual. */
 function obtenerAgregado(agregados, fila) {
-  const producto = claveProducto(fila.producto);
+  // La llave va por el nombre homologado, no por el que trae cada fuente: SAP
+  // escribe 'VIRUTA-ASERUTA (TS)', la planilla 'viruta' y el Plan 'VIRUTA', y
+  // con el nombre crudo el mismo material abriría tres filas distintas.
+  const producto = claveProducto(fila.productoCorto || fila.producto);
   let clave;
   let proveedorPlan;
 

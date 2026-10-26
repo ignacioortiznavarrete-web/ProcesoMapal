@@ -221,6 +221,9 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
   const sinHomologar = {};
   const sinCruce = {};
   const sinPlan = {};
+  // Productos escritos a mano que no encontraron par en SAP ni en el Plan: son
+  // los que dejan camiones en cero sin que se vea el motivo.
+  const productosSinHomologar = {};
   const duplicados = [];
 
   datos.filas.forEach(function (fila) {
@@ -247,6 +250,11 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
 
     if (fila.sinPlan && !fila.sinHomologar && fila.ts > 0) {
       sinPlan[fila.proveedor] = (sinPlan[fila.proveedor] || 0) + fila.ts;
+    }
+
+    if (fila.productoSinHomologar && fila.producto) {
+      const nombre = productoCorto(fila.producto);
+      productosSinHomologar[nombre] = (productosSinHomologar[nombre] || 0) + 1;
     }
   });
 
@@ -282,6 +290,11 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
     ultimaActualizacion: propiedades.getProperty('ultimaActualizacion') || '',
     historiaDesde: historiaDesde,
     productosIncluidos: (CONFIG.PRODUCTOS_INCLUIDOS || []).slice(),
+    productosSinHomologar: Object.keys(productosSinHomologar)
+      .sort(function (a, b) { return productosSinHomologar[b] - productosSinHomologar[a]; })
+      .map(function (nombre) {
+        return { producto: nombre, camiones: productosSinHomologar[nombre] };
+      }),
     descartadosProducto: datos.planilla.excluidosProducto,
     descartadosEstado: datos.planilla.excluidosEstado,
     camionesPlanilla: datos.planilla.filas.length,
@@ -317,7 +330,7 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
 function traerPlanillaDesdePanel() {
   const resultado = importarPlanillaOrigen();
 
-  sincronizarHomologacion();
+  sincronizarEquivalencias();
 
   return {
     archivo: resultado.archivo,

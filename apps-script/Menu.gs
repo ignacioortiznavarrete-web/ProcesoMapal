@@ -11,7 +11,7 @@ function onOpen() {
     .addItem('3. Actualizar control', 'accionActualizarControl')
     .addSeparator()
     .addItem('Actualizar todo (traer + control)', 'accionActualizarTodo')
-    .addItem('Detectar proveedores nuevos', 'accionSincronizarHomologacion')
+    .addItem('Detectar proveedores y productos nuevos', 'accionSincronizarHomologacion')
     .addSeparator()
     .addItem('Recalcular ahora (ediciones pendientes)', 'accionRecalcularPendiente')
     .addSeparator()
@@ -30,7 +30,7 @@ function actualizarTodo() {
   }
   try {
     const importacion = importarPlanillaOrigen();
-    sincronizarHomologacion();
+    sincronizarEquivalencias();
     const resumen = actualizarControl();
     const propiedades = PropertiesService.getDocumentProperties();
     propiedades.setProperty('ultimaActualizacion', new Date().toISOString());
@@ -89,10 +89,13 @@ function resumenImportacion(resultado) {
 
 function accionSincronizarHomologacion() {
   try {
-    const resultado = sincronizarHomologacion();
+    const resultado = sincronizarEquivalencias();
     SpreadsheetApp.getUi().alert(
-      resultado.agregadas + ' proveedor(es) nuevo(s) agregados a la hoja "' +
-      CONFIG.HOJA_HOMOLOGACION + '". Revisa las sugerencias antes de actualizar el control.'
+      resultado.proveedores.agregadas + ' proveedor(es) nuevo(s) en "' +
+      CONFIG.HOJA_HOMOLOGACION + '" y ' +
+      resultado.productos.agregadas + ' producto(s) nuevo(s) en "' +
+      CONFIG.HOJA_HOMOLOGACION_PRODUCTOS +
+      '". Revisa las sugerencias antes de actualizar el control.'
     );
   } catch (error) {
     SpreadsheetApp.getUi().alert('No se pudo sincronizar la homologación:\n\n' + error.message);
@@ -107,7 +110,8 @@ function verificarInstalacion() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
   const lineas = ['Versión del código: ' + VERSION, ''];
 
-  [CONFIG.HOJA_SAP, CONFIG.HOJA_PLANILLA, CONFIG.HOJA_PLAN, CONFIG.HOJA_HOMOLOGACION]
+  [CONFIG.HOJA_SAP, CONFIG.HOJA_PLANILLA, CONFIG.HOJA_PLAN, CONFIG.HOJA_HOMOLOGACION,
+   CONFIG.HOJA_HOMOLOGACION_PRODUCTOS]
     .forEach(function (nombre) {
       const hoja = libro.getSheetByName(nombre);
       lineas.push(hoja

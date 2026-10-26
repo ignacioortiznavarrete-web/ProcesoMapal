@@ -33,6 +33,10 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
   pedido vino en varias posiciones, las líneas se suman antes de promediar.
 - El corte es por proveedor: hasta su última fecha contabilizada manda SAP;
   desde ahí en adelante, la planilla por promedio. El peso bruto nunca se suma.
+- Homologa los **nombres de producto** con la hoja `homologacion productos`:
+  SAP escribe `VIRUTA-ASERUTA (TS)`, la planilla manual `viruta` y el Plan
+  `VIRUTA`. Sin traducirlos, el mismo material abre tres filas distintas y el
+  promedio TS/carga no se encuentra.
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
 - Controla astilla verde, aserrín, combustible y viruta (`PRODUCTOS_INCLUIDOS`),
@@ -69,6 +73,8 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 4. Recargar la planilla: aparece el menú **Control Ingreso**.
 5. Correr, en orden:
    - `1. Traer planilla de ingresos`
+   - `Detectar proveedores y productos nuevos` (deja las dos hojas de
+     equivalencias con una fila por nombre y una sugerencia)
    - `2. Homologar proveedores...` (confirmar los pares sugeridos)
    - `3. Actualizar control`
 6. `Activar actualización automática` instala los dos disparadores:
@@ -77,7 +83,8 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
      los camiones que otra persona escribe en la planilla externa no generan
      ningún evento en este archivo.
    - **por edición**: al completar una fila de `Planilla Exportada`,
-     `homologacion`, `Plan` o `Ingresos Sap` se recalcula el control
+     `homologacion`, `homologacion productos`, `Plan` o `Ingresos Sap` se
+     recalcula el control
      `CONFIG.SEGUNDOS_ESPERA_EDICION` segundos después de la **última**
      edición. Escribir una fila son varias celdas seguidas: si recalculara en
      cada una, el control quedaría a medio llenar y se agotaría la cuota. Ese
@@ -97,6 +104,7 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 | `MESES_A_IMPORTAR` | hojas mensuales a traer desde el mes actual (1 = sólo el mes en curso, 0 = todas) |
 | `PRODUCTOS_INCLUIDOS` | productos a controlar; `*` al final vale como prefijo (`ASERRIN*` toma `ASERRIN` y `ASERRIN SECO`) |
 | `ESTADOS_EXCLUIDOS` | estados de la planilla que se descartan (ANULADO...) |
+| `PRODUCTOS_EQUIVALENTES` | equivalencias de producto de fábrica; la hoja `homologacion productos` las pisa |
 | `PROMEDIO_VENTANA_DIAS` | días del promedio TS/camión (0 = todo el histórico) |
 | `PROMEDIO_MINIMO_CAMIONES` | mínimo de cargas para confiar en la ventana |
 | `TS_POR_CARGA_MINIMO` / `MAXIMO` | rango esperado por carga; fuera de él se avisa |

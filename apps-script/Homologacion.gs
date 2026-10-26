@@ -9,6 +9,17 @@
 const HOMOLOGACION_EXTRA = ['Confianza', 'Estado'];
 
 /**
+ * Deja al día las dos tablas de equivalencias: proveedores y productos. Van
+ * juntas porque un camión necesita las dos para cruzar, y si sólo se
+ * sincronizara una el control quedaría a medias sin decir por qué.
+ */
+function sincronizarEquivalencias() {
+  const proveedores = sincronizarHomologacion();
+  const productos = sincronizarHomologacionProductos();
+  return { proveedores: proveedores, productos: productos };
+}
+
+/**
  * Agrega a la hoja 'homologacion' los proveedores que todavía no están,
  * con una sugerencia de equivalencia. Nunca modifica filas ya existentes.
  */

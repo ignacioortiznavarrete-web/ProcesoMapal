@@ -124,6 +124,39 @@ toma también `ASERRIN SECO`). Cada producto lleva su propia fila de control:
 si un proveedor entrega astilla y viruta, cada una se compara contra su plan,
 nunca una suma de las dos.
 
+### Cada fuente escribe el material a su manera
+
+El mismo producto se llama distinto en las tres fuentes:
+
+| SAP | Planilla manual | Plan |
+|---|---|---|
+| `ASTILLA VERDE (TS)` | `ASTILLA VERDE` | `ASTILLA VERDE` |
+| `VIRUTA-ASERUTA (TS)` | `viruta` | `VIRUTA` |
+
+Con el nombre crudo eso rompe dos cosas, las dos sin avisar: el control abre
+una fila por cada forma de escribirlo (la misma viruta partida en tres, ninguna
+cuadrando contra el plan) y el promedio TS/carga del material no se encuentra,
+así que los camiones que SAP todavía no procesó quedan en cero.
+
+La hoja **`homologacion productos`** traduce los tres nombres, igual que
+`homologacion` hace con los proveedores: `Producto SAP | Producto Planilla |
+Producto Plan`. `Detectar proveedores y productos nuevos` la llena con una fila
+por nombre encontrado y una sugerencia; lo que se escriba a mano manda.
+`CONFIG.PRODUCTOS_EQUIVALENTES` trae las equivalencias conocidas de fábrica
+para que el cruce funcione antes de que nadie toque la hoja.
+
+El nombre con que se agrupa es el del **Plan** si existe (es contra ese plan
+que hay que cuadrar) y si no el de la planilla; nunca el de SAP, que es el
+menos legible. El detalle sí guarda el nombre original de cada fuente, para
+poder rastrear de dónde salió cada fila.
+
+La tabla se consulta **antes** del filtro `PRODUCTOS_INCLUIDOS`: si alguien
+escribe `VIRUTILLA` y la tabla la traduce a viruta, el camión entra. Si no la
+traduce y el nombre igual pasa el filtro (`ASERRIN HUMEDO` con `ASERRIN*`),
+queda en 0 TS y el panel lo avisa, en vez de desaparecer sin dejar rastro.
+
+### El promedio
+
 El promedio TS/carga también es por material, y en ese orden:
 
 1. el histórico SAP de **ese proveedor en ese material**;
@@ -136,10 +169,10 @@ note. Es mejor que el camión quede visible en 0 con la alerta
 "sin histórico SAP de \<producto\>" hasta que el export de SAP traiga el
 material.
 
-> Hoy el export de `Ingresos Sap` sólo tiene astilla verde (material
-> `3000039`). Mientras no incluya viruta, aserrín y combustible, esos camiones
-> van a quedar en `PENDIENTE sin historial SAP` con 0 TS, y el `Plan` tampoco
-> tiene filas para ellos (salen con "sin plan").
+> El export de `Ingresos Sap` tiene que traer los materiales que se quieren
+> controlar. Los que no estén ahí quedan en `PENDIENTE SIN PROMEDIO` con 0 TS
+> y su alerta; si además el `Plan` no tiene filas para ellos, salen con
+> "sin plan".
 
 ## Actualización automática
 
@@ -148,7 +181,7 @@ Dos disparadores, porque resuelven cosas distintas:
 | | Qué corre | Cuándo |
 |---|---|---|
 | **Tiempo** (`actualizarTodo`) | importar + homologar + recalcular | cada `HORAS_ENTRE_ACTUALIZACIONES` |
-| **Edición** (`alEditar` → `recalcularPendiente`) | homologar + recalcular | `SEGUNDOS_ESPERA_EDICION` después de la última edición |
+| **Edición** (`alEditar` → `recalcularPendiente`) | homologar + recalcular | `SEGUNDOS_ESPERA_EDICION` después de la última edición en `Planilla Exportada`, `homologacion`, `homologacion productos`, `Plan` o `Ingresos Sap` |
 
 El de tiempo no se puede reemplazar por el de edición: la planilla de
 recepción es un **archivo externo**, y los camiones que otra persona escribe

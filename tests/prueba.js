@@ -17,8 +17,8 @@ const sap = [
   ['5022350777','72865','3000039','ASTILLA VERDE (TS)','05-10-2026','4800084631',10,'ASTILLA VERDE (TS) FSC-CW','11,841',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
   ['5022350778','72866','3000039','ASTILLA VERDE (TS)','06-10-2026','4800084631',10,'ASTILLA VERDE (TS) FSC-CW','14,159',0,'TS','6000035106','FORESTAL COLLICURA LTDA.','','1250-36','Santa Juana','CANCHA','S',0,'SGS','FUNDO','MADERASMAPAL'],
   ['5022340673','3285','3000039','ASTILLA VERDE (TS)','07-10-2026','4800084654',20,'ASTILLA VERDE (TS)','11,395',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL'],
-  ['5022400001','60575','3000040','VIRUTA (TS)','02-10-2026','4800084900',10,'VIRUTA (TS)','7,500',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
-  ['5022400002','60576','3000040','VIRUTA (TS)','03-10-2026','4800084900',10,'VIRUTA (TS)','8,100',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400001','60575','3000040','VIRUTA-ASERUTA (TS)','02-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','7,500',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400002','60576','3000040','VIRUTA-ASERUTA (TS)','03-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','8,100',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022340999','900','3000039','ASTILLA VERDE (TS)','20-09-2026','4800084654',20,'ASTILLA VERDE (TS)','12,500',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL']
 ];
 
@@ -32,14 +32,20 @@ const plan = [
   ['','FORESTAL COLLICURA',"95,5",253],
   ['','SERVICIOS DE TRANSPORTE VOLCÁN SPA',95,253],
   ['','FORESTAL BIOCHIPER SPA.',92,0],
-  ['','TAM',93,253]
+  ['','TAM',93,253],
+  ['VIRUTA','COMERCIAL GUIVAR LTDA.',40,60],
+  ['','FORESTAL COLLICURA',42,30]
 ];
 
 const libro = new Libro([
   new Hoja('Ingresos Sap', sap),
   new Hoja('Planilla Exportada', [['N°','FECHA','PRODUCTO','PROVEEDOR','COMUNA','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','Columna 10','Observación']]),
   new Hoja('Plan', plan),
-  new Hoja('homologacion', [['Proveedor SAP','Proveedor Planilla','Proveedor Plan']])
+  new Hoja('homologacion', [['Proveedor SAP','Proveedor Planilla','Proveedor Plan']]),
+  new Hoja('homologacion productos', [
+    ['Producto SAP','Producto Planilla','Producto Plan'],
+    ['VIRUTA-ASERUTA (TS)','VIRUTILLA','VIRUTA']
+  ])
 ]);
 
 // --- Planilla origen: RECEPCION DIARIA MADERAS (una hoja por mes) ----------
@@ -66,7 +72,9 @@ const octubre2026 = [
   [11,'02-10-2026','ASTILLA VERDE','GUIVAR','TREHUACO','53999','BSZK17',43500,'467966','OK','guía que no cruza, día ya cubierto por SAP','','','',''],
   [12,'02-10-2026','VIRUTA','GUIVAR','TREHUACO','60575','BSZK30',31720,'467967','OK','viruta que sí cruza','','','',''],
   [13,'12-10-2026','VIRUTA','COLLICURA','SANTA JUANA','76950','FCPJ65',30100,'467968','OK','viruta sin histórico propio','','','',''],
-  [14,'','','','','','','','','','','','','','']
+  [14,'13-10-2026','VIRUTILLA','GUIVAR','TREHUACO','60590','BSZK30',30900,'467969','OK','nombre escrito distinto','','','',''],
+  [15,'16-10-2026','ASERRIN HUMEDO','GUIVAR','TREHUACO','60600','BSZK30',28400,'467970','OK','variante sin traducir','','','',''],
+  [16,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -116,7 +124,7 @@ global.HtmlService = {
 
 // --- Carga del código del proyecto ----------------------------------------
 const fs = require('fs');
-const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Motor.gs','Control.gs','Tablero.gs','Triggers.gs','Menu.gs'];
+const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Productos.gs','Motor.gs','Control.gs','Tablero.gs','Triggers.gs','Menu.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
 // Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
 // ayudante para poder tocar la configuración desde la prueba.
@@ -162,7 +170,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 13, '13 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 15, '15 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -173,7 +181,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 15, '15 camiones importados (sin filas de relleno)');
+assert(importado.filas === 17, '17 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -203,8 +211,8 @@ function valor(proveedor, columna, producto) {
   return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 14,
-  'entran astilla y viruta; se descarta sólo la fila ANULADO');
+assert(resumen.camionesPlanilla === 16,
+  'entran astilla, viruta y la variante homologada; se descarta sólo ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52, 'GUIVAR: 39 TS reales + 13 TS estimadas');
@@ -256,7 +264,7 @@ assert(pesoOctubre[8] === 43.66, 'el peso bruto queda en toneladas (43660 kg -> 
 console.log('\n--- el promedio es por material ---');
 const promediosHoja2 = libro.getSheetByName('Promedios SAP').datos;
 const guivarViruta = promediosHoja2.find(f =>
-  String(f[0]) === 'COMERCIAL GUIVAR LTDA.' && String(f[1]) === 'VIRUTA (TS)') || [];
+  String(f[0]) === 'COMERCIAL GUIVAR LTDA.' && String(f[1]) === 'VIRUTA-ASERUTA (TS)') || [];
 assert(guivarViruta[7] === 7.8, 'GUIVAR tiene su propio TS/carga de viruta (7,8)');
 
 const virutaGuivar = detalle.find(f => String(f[6]) === '60575') || [];
@@ -273,6 +281,38 @@ const filaVirutaPlan = control.slice(6).find(f =>
   String(f[0]) === 'VIRUTA' && String(f[1]).indexOf('FORESTAL COLLICURA') === 0) || [];
 assert(filaVirutaPlan.length > 0,
   'el control abre una fila aparte por producto: la viruta no se suma a la astilla');
+
+// SAP escribe 'VIRUTA-ASERUTA (TS)', la planilla 'VIRUTA' y el Plan 'VIRUTA':
+// los tres nombres tienen que caer en la misma fila.
+console.log('\n--- homologación de productos ---');
+
+const virutaGuivarControl = control.slice(6).filter(f =>
+  String(f[0]) === 'VIRUTA' && String(f[1]) === 'COMERCIAL GUIVAR LTDA.');
+assert(virutaGuivarControl.length === 1,
+  'el nombre de SAP y el de la planilla caen en UNA fila, no en tres');
+
+const vg = virutaGuivarControl[0] || [];
+assert(vg[3] === 2 && vg[4] === 1 && vg[5] === 1 && vg[7] === 1,
+  'la fila junta los 2 camiones de la planilla, el que cruza, el pendiente y la carga sólo SAP');
+assert(vg[8] === 15.6 && vg[12] === 60,
+  'la viruta se compara contra el plan de viruta (60 TS), no contra el de astilla');
+
+const variante = detalle.find(f => String(f[6]) === '60590') || [];
+assert(variante.length > 0,
+  'un producto escrito distinto no se descarta si la tabla lo traduce');
+assert(variante[11] === 7.8,
+  'la variante homologada toma el promedio del material de SAP');
+
+const sinTraducir = detalle.find(f => String(f[6]) === '60600') || [];
+assert(String(sinTraducir[10]) === 'PENDIENTE SIN PROMEDIO' && sinTraducir[11] === 0,
+  'un producto que no se pudo traducir queda en cero, no con el promedio de otro material');
+assert(String(sinTraducir[12]).indexOf('sin histórico SAP de ASERRIN HUMEDO') >= 0,
+  'y el detalle dice exactamente por qué');
+
+const soloSapViruta = detalle.find(f => String(f[6]) === '60576') || [];
+assert(String(soloSapViruta[10]) === 'SOLO SAP' && String(soloSapViruta[2]) === 'VIRUTA-ASERUTA (TS)',
+  'el detalle conserva el nombre original de cada fuente para poder rastrearlo');
+
 
 function imprimir(nombre, maxCol) {
   const hoja = libro.getSheetByName(nombre);
@@ -321,7 +361,10 @@ assert(panel.fuente.corteGlobal === '2026-10-07',
   'el panel informa hasta dónde cubre SAP');
 assert(panel.promedios.some(x => x.proveedor === 'COMERCIAL GUIVAR LTDA.' &&
   x.promedio === 13), 'el panel entrega el factor TS/carga por proveedor');
-assert(panel.plan.filas.length === 9, 'el panel entrega el Plan completo');
+assert(panel.plan.filas.length === 11, 'el panel entrega el Plan completo');
+assert(panel.fuente.productosSinHomologar.length === 1 &&
+  panel.fuente.productosSinHomologar[0].producto === 'ASERRIN HUMEDO',
+  'el panel avisa del producto que pasó el filtro pero no se pudo traducir');
 
 // --- Mes sin hoja en la planilla origen ------------------------------------
 console.log('\n--- la hoja del mes todavía no existe ---');

@@ -1553,6 +1553,18 @@
           '): suman cero TS. Se asignan en <b>Homologación</b>.');
       }
 
+      if ((f.productosSinHomologar || []).length) {
+        var cp = f.productosSinHomologar.reduce(function (t, x) { return t + x.camiones; }, 0);
+
+        ojo.push('<b>' + entero(cp) + ' camión(es)</b> traen un producto que no ' +
+          'cruza con el nombre de SAP ni con el del Plan (' +
+          esc(f.productosSinHomologar.slice(0, 4).map(function (x) {
+            return x.producto;
+          }).join(', ')) + (f.productosSinHomologar.length > 4 ? '…' : '') +
+          '): sin su material no hay promedio TS/carga. Se traduce en la hoja ' +
+          '<b>homologacion productos</b>.');
+      }
+
       if ((f.sinCruce || []).length) {
         var sc = f.sinCruce.reduce(function (t, x) { return t + x.camiones; }, 0);
 

@@ -20,6 +20,7 @@ function resolverIngresos(libro) {
   const planilla = cargarPlanilla(libro);
   const plan = cargarPlan(libro);
   const homologacion = cargarHomologacion(libro);
+  const homologacionProductos = cargarHomologacionProductos(libro);
   const promedios = calcularPromedios(sap);
 
   const filas = [];
@@ -28,6 +29,9 @@ function resolverIngresos(libro) {
   // ---- 1) Camiones de la planilla manual ----------------------------------
   planilla.filas.forEach(function (fila) {
     const equivalencia = resolverProveedor(fila.proveedor, homologacion, sap, plan);
+    // El producto también se traduce: SAP, la planilla y el Plan lo escriben
+    // distinto, y el promedio TS/carga es por material.
+    const material = resolverProducto(fila.producto, homologacionProductos, sap, plan);
 
     // Las cargas de SAP están indexadas por proveedor + guía: los números de
     // guía se repiten entre proveedores, así que la guía sola no identifica
@@ -69,7 +73,8 @@ function resolverIngresos(libro) {
       fuente = 'SIN DATO';
       detalleFuente = 'SAP ya cubre este día: revisar el Nº de guía';
     } else {
-      const referencia = promedioPara(promedios, equivalencia.sap, fila.producto);
+      const referencia = promedioPara(
+        promedios, equivalencia.sap, material.canonico, material.sap);
       promedioUsado = referencia.promedio;
       cantidad = referencia.promedio;
       fuente = referencia.promedio > 0 ? 'ESTIMADO' : 'SIN DATO';
@@ -102,7 +107,9 @@ function resolverIngresos(libro) {
       detalleFuente: detalleFuente,
       duplicado: duplicado,
       producto: fila.producto,
-      productoCorto: productoCorto(fila.producto),
+      productoCorto: material.canonico,
+      productoSap: material.sap,
+      productoSinHomologar: !material.homologado,
       proveedorPlanilla: fila.proveedor,
       proveedorSap: equivalencia.sap,
       proveedorPlan: equivalencia.plan,
@@ -142,7 +149,9 @@ function resolverIngresos(libro) {
         : 'SAP (real)',
       duplicado: false,
       producto: carga.material,
-      productoCorto: productoCorto(carga.material),
+      productoCorto: resolverProductoDesdeSap(carga.material, homologacionProductos, plan),
+      productoSap: carga.material,
+      productoSinHomologar: false,
       proveedorPlanilla: '',
       proveedorSap: carga.proveedor,
       proveedorPlan: nombrePlan,
@@ -171,6 +180,7 @@ function resolverIngresos(libro) {
     planilla: planilla,
     plan: plan,
     homologacion: homologacion,
+    homologacionProductos: homologacionProductos,
     promedios: promedios
   };
 }

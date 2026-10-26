@@ -35,6 +35,7 @@ const CONFIG = {
   HOJA_PLANILLA: 'Planilla Exportada',
   HOJA_PLAN: 'Plan',
   HOJA_HOMOLOGACION: 'homologacion',
+  HOJA_HOMOLOGACION_PRODUCTOS: 'homologacion productos',
   HOJA_CONTROL: 'Control Ingreso',
   HOJA_DETALLE: 'Detalle Camiones',
   HOJA_PROMEDIOS: 'Promedios SAP',
@@ -65,7 +66,7 @@ const CONFIG = {
   // --- Actualización automática -------------------------------------------
   HORAS_ENTRE_ACTUALIZACIONES: 1,
 
-  // Al editar a mano 'Planilla Exportada', 'homologacion' o 'Plan', el control
+  // Al editar a mano 'Planilla Exportada', las homologaciones o 'Plan', el control
   // se recalcula solo. No al instante: escribir veinte filas dispararía veinte
   // recálculos. Se espera a que la mano pare.
   //
@@ -75,7 +76,23 @@ const CONFIG = {
 
   // --- Homologación --------------------------------------------------------
   // Puntaje mínimo (0 a 1) para proponer una homologación automática.
-  UMBRAL_SUGERENCIA: 0.62
+  UMBRAL_SUGERENCIA: 0.62,
+
+  // Equivalencias de producto que vienen de fábrica, para que el cruce funcione
+  // antes de que alguien llene la hoja 'homologacion productos'. Lo que se
+  // escriba en esa hoja manda sobre esta lista.
+  //
+  // El mismo material se escribe distinto en cada fuente: SAP le pone la unidad
+  // y su propia nomenclatura ('VIRUTA-ASERUTA (TS)'), la planilla manual se
+  // escribe a mano ('viruta') y el Plan usa el nombre comercial. Sin esta tabla
+  // los tres nombres caen en filas distintas del control y el promedio TS/carga
+  // del material no se encuentra.
+  PRODUCTOS_EQUIVALENTES: [
+    { planilla: 'ASTILLA VERDE', sap: 'ASTILLA VERDE (TS)', plan: 'ASTILLA VERDE' },
+    { planilla: 'VIRUTA', sap: 'VIRUTA-ASERUTA (TS)', plan: 'VIRUTA' },
+    { planilla: 'ASERRIN', sap: '', plan: 'ASERRIN' },
+    { planilla: 'COMBUSTIBLE', sap: '', plan: 'COMBUSTIBLE' }
+  ]
 };
 
 /**
@@ -120,6 +137,11 @@ const COLUMNAS = {
     sap: ['Proveedor SAP'],
     planilla: ['Proveedor Planilla'],
     plan: ['Proveedor Plan']
+  },
+  HOMOLOGACION_PRODUCTOS: {
+    sap: ['Producto SAP', 'Material SAP'],
+    planilla: ['Producto Planilla'],
+    plan: ['Producto Plan']
   }
 };
 
@@ -129,6 +151,7 @@ const ESTADO = {
   PENDIENTE: 'PENDIENTE (estimado)',
   SIN_HOMOLOGAR: 'SIN HOMOLOGAR',
   SIN_PROMEDIO: 'PENDIENTE SIN PROMEDIO',
+  PRODUCTO_SIN_HOMOLOGAR: 'PRODUCTO SIN HOMOLOGAR',
   SIN_SAP: 'PENDIENTE (proveedor sin historial SAP)',
   SIN_CRUCE: 'SIN CRUCE (día ya cubierto por SAP)',
   SOLO_SAP: 'SOLO SAP',

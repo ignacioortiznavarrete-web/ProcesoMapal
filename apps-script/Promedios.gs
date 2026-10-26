@@ -234,8 +234,10 @@ function buscarPorMaterial(mapa, prefijo, claveProd) {
  * Así que: proveedor + material, o el mismo material de los demás proveedores,
  * o nada. Un cero con el motivo escrito es mejor que una cifra inventada.
  */
-function promedioPara(promedios, proveedorSap, producto) {
-  const claveProd = claveProducto(producto);
+function promedioPara(promedios, proveedorSap, producto, materialSap) {
+  // El nombre homologado de SAP es el que coincide de verdad con las claves de
+  // los promedios; el de la planilla sólo sirve de respaldo y para el mensaje.
+  const claveProd = claveProducto(materialSap) || claveProducto(producto);
 
   if (proveedorSap) {
     const propio = buscarPorMaterial(
