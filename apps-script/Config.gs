@@ -87,11 +87,26 @@ const CONFIG = {
   // escribe a mano ('viruta') y el Plan usa el nombre comercial. Sin esta tabla
   // los tres nombres caen en filas distintas del control y el promedio TS/carga
   // del material no se encuentra.
+  // Verificado contra el export de SAP de octubre 2026 (779 líneas, 5 materiales)
+  // y contra los productos del Plan (ASTILLA VERDE, ASERRIN, VIRUTA).
   PRODUCTOS_EQUIVALENTES: [
     { planilla: 'ASTILLA VERDE', sap: 'ASTILLA VERDE (TS)', plan: 'ASTILLA VERDE' },
+    { planilla: 'ASERRIN', sap: 'ASERRIN (TS)', plan: 'ASERRIN' },
     { planilla: 'VIRUTA', sap: 'VIRUTA-ASERUTA (TS)', plan: 'VIRUTA' },
-    { planilla: 'ASERRIN', sap: '', plan: 'ASERRIN' },
-    { planilla: 'COMBUSTIBLE', sap: '', plan: 'COMBUSTIBLE' }
+
+    // COMBUSTIBLE llega en la planilla manual pero no existe como material en
+    // SAP ni como línea del Plan. Queda declarado igual: así sus camiones se
+    // cuentan y se ven en 0 TS en vez de desaparecer por el filtro.
+    { planilla: 'COMBUSTIBLE', sap: '', plan: '' },
+
+    // Materiales que SAP sí separa y la planilla no: ahí todo se escribe
+    // 'ASTILLA VERDE'. Se dejan en su propia fila a propósito, porque su
+    // TS/carga no se parece al de la astilla verde (9,4 y 15,8 contra 11,3):
+    // mezclarlos correría el avance sin que nadie lo note. Si el negocio
+    // decide que van contra el plan de ASTILLA VERDE, basta escribir ese
+    // nombre en la columna 'Producto Plan' de la hoja de homologación.
+    { planilla: '', sap: 'ASTILLA VERDE CON CORTEZA (TS)', plan: '' },
+    { planilla: '', sap: 'ASTILLA VERDE OTRA ESPECIE MAD', plan: '' }
   ]
 };
 

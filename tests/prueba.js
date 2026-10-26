@@ -19,6 +19,8 @@ const sap = [
   ['5022340673','3285','3000039','ASTILLA VERDE (TS)','07-10-2026','4800084654',20,'ASTILLA VERDE (TS)','11,395',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL'],
   ['5022400001','60575','3000040','VIRUTA-ASERUTA (TS)','02-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','7,500',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022400002','60576','3000040','VIRUTA-ASERUTA (TS)','03-10-2026','4800084900',10,'VIRUTA-ASERUTA (TS)','8,100',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400010','31505','3000043','ASERRIN (TS)','02-10-2026','4800086009',50,'ASERRIN (TS) FSC-CW','11,000',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
+  ['5022400011','31506','3000043','ASERRIN (TS)','03-10-2026','4800086009',50,'ASERRIN (TS) FSC-CW','11,400',0,'TS','6000034226','COMERCIAL GUIVAR LTDA.','','166-277','Treguaco','MAITECO','S',0,'PBN','MAITECO','MADERASMAPAL'],
   ['5022340999','900','3000039','ASTILLA VERDE (TS)','20-09-2026','4800084654',20,'ASTILLA VERDE (TS)','12,500',0,'TS','6000093780','SERVICIOS DE TRANSPORTE VOLCÁN','','323-386','Quirihue','CON-CON','N','','','CON-CON','MADERASMAPAL']
 ];
 
@@ -33,6 +35,7 @@ const plan = [
   ['','SERVICIOS DE TRANSPORTE VOLCÁN SPA',95,253],
   ['','FORESTAL BIOCHIPER SPA.',92,0],
   ['','TAM',93,253],
+  ['ASERRIN','FORESTAL COLLICURA',52,25],
   ['VIRUTA','COMERCIAL GUIVAR LTDA.',40,60],
   ['','FORESTAL COLLICURA',42,30]
 ];
@@ -74,7 +77,9 @@ const octubre2026 = [
   [13,'12-10-2026','VIRUTA','COLLICURA','SANTA JUANA','76950','FCPJ65',30100,'467968','OK','viruta sin histórico propio','','','',''],
   [14,'13-10-2026','VIRUTILLA','GUIVAR','TREHUACO','60590','BSZK30',30900,'467969','OK','nombre escrito distinto','','','',''],
   [15,'16-10-2026','ASERRIN HUMEDO','GUIVAR','TREHUACO','60600','BSZK30',28400,'467970','OK','variante sin traducir','','','',''],
-  [16,'','','','','','','','','','','','','','']
+  [16,'14-10-2026','ASERRIN','COLLICURA','SANTA JUANA','31999','FCPJ65',29800,'467971','OK','aserrín sin histórico propio','','','',''],
+  [17,'14-10-2026','COMBUSTIBLE','RIO CRUCES','TALCAHUANO','24742','CPCH94',41860,'467972','OK','SAP no tiene este material','','','',''],
+  [18,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -170,7 +175,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 15, '15 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 17, '17 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -181,7 +186,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 17, '17 camiones importados (sin filas de relleno)');
+assert(importado.filas === 19, '19 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -211,7 +216,7 @@ function valor(proveedor, columna, producto) {
   return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 16,
+assert(resumen.camionesPlanilla === 18,
   'entran astilla, viruta y la variante homologada; se descarta sólo ANULADO');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1, 'GUIVAR: 1 camión pendiente');
@@ -309,6 +314,27 @@ assert(String(sinTraducir[10]) === 'PENDIENTE SIN PROMEDIO' && sinTraducir[11] =
 assert(String(sinTraducir[12]).indexOf('sin histórico SAP de ASERRIN HUMEDO') >= 0,
   'y el detalle dice exactamente por qué');
 
+// Los tres materiales de SAP tienen factores muy distintos (astilla 13,
+// aserrín 11,2, viruta 7,8). Ninguno puede contagiar al otro.
+const aserrinCollicura = detalle.find(f => String(f[6]) === '31999') || [];
+assert(aserrinCollicura[11] === 11.2,
+  'el aserrín de COLLICURA usa el promedio de ASERRIN (11,2), no el de viruta ni el de astilla');
+
+const factores = {};
+libro.getSheetByName('Promedios SAP').datos.slice(1)
+  .filter(f => String(f[0]) === 'COMERCIAL GUIVAR LTDA.')
+  .forEach(f => { factores[String(f[1])] = f[7]; });
+assert(factores['ASTILLA VERDE (TS)'] === 13 &&
+  factores['ASERRIN (TS)'] === 11.2 &&
+  factores['VIRUTA-ASERUTA (TS)'] === 7.8,
+  'GUIVAR tiene un factor propio por cada material, no uno solo');
+
+// COMBUSTIBLE está declarado en la tabla pero SAP no tiene ese material:
+// se cuenta, queda en cero y NO se reporta como producto sin homologar.
+const combustible = detalle.find(f => String(f[6]) === '24742') || [];
+assert(combustible.length > 0 && combustible[11] === 0,
+  'el combustible entra al control aunque SAP no lo tenga, en cero');
+
 const soloSapViruta = detalle.find(f => String(f[6]) === '60576') || [];
 assert(String(soloSapViruta[10]) === 'SOLO SAP' && String(soloSapViruta[2]) === 'VIRUTA-ASERUTA (TS)',
   'el detalle conserva el nombre original de cada fuente para poder rastrearlo');
@@ -353,18 +379,18 @@ const panelGuivar = panel.filas.filter(f =>
   f.proveedor === 'COMERCIAL GUIVAR LTDA.' && f.mes === '2026-10');
 assert(panelGuivar.some(f => f.precio === 93),
   'cada fila trae el precio que le fija el Plan');
-assert(panel.fuente.sinHomologar.length === 2 &&
-  panel.fuente.sinHomologar.some(x => x.proveedor === 'ENESA') &&
-  panel.fuente.sinHomologar.some(x => x.proveedor === 'MASISA'),
+assert(panel.fuente.sinHomologar.length === 3 &&
+  ['ENESA', 'MASISA', 'RIO CRUCES'].every(nombre =>
+    panel.fuente.sinHomologar.some(x => x.proveedor === nombre)),
   'el panel avisa de los nombres sin par, en cualquier producto');
 assert(panel.fuente.corteGlobal === '2026-10-07',
   'el panel informa hasta dónde cubre SAP');
 assert(panel.promedios.some(x => x.proveedor === 'COMERCIAL GUIVAR LTDA.' &&
   x.promedio === 13), 'el panel entrega el factor TS/carga por proveedor');
-assert(panel.plan.filas.length === 11, 'el panel entrega el Plan completo');
+assert(panel.plan.filas.length === 12, 'el panel entrega el Plan completo');
 assert(panel.fuente.productosSinHomologar.length === 1 &&
   panel.fuente.productosSinHomologar[0].producto === 'ASERRIN HUMEDO',
-  'el panel avisa del producto que pasó el filtro pero no se pudo traducir');
+  'el panel avisa sólo del producto que no se pudo traducir, no del combustible declarado');
 
 // --- Mes sin hoja en la planilla origen ------------------------------------
 console.log('\n--- la hoja del mes todavía no existe ---');

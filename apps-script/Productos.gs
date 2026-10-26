@@ -44,7 +44,10 @@ function resolverProducto(nombrePlanilla, homologacionProductos, sap, plan) {
     sap: nombreSap,
     plan: nombrePlan,
     canonico: nombrePlan || limpio,
-    homologado: !!(nombreSap || nombrePlan)
+    // Un producto que figura en la tabla ya está reconocido, aunque no tenga
+    // par en SAP ni en el Plan: COMBUSTIBLE es ese caso y no hay nada que
+    // homologar. Avisar de él cada mes sería ruido que tapa los de verdad.
+    homologado: !!(registro || nombreSap || nombrePlan)
   };
 }
 

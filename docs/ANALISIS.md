@@ -128,10 +128,28 @@ nunca una suma de las dos.
 
 El mismo producto se llama distinto en las tres fuentes:
 
-| SAP | Planilla manual | Plan |
-|---|---|---|
-| `ASTILLA VERDE (TS)` | `ASTILLA VERDE` | `ASTILLA VERDE` |
-| `VIRUTA-ASERUTA (TS)` | `viruta` | `VIRUTA` |
+Los materiales que trae el export de SAP (verificado sobre octubre 2026, 779
+líneas), con su factor real por carga:
+
+| Código | SAP | Planilla manual | Plan | Cargas | TS/carga |
+|---|---|---|---|---|---|
+| 3000039 | `ASTILLA VERDE (TS)` | `ASTILLA VERDE` | `ASTILLA VERDE` | 608 | 11,32 |
+| 3000043 | `ASERRIN (TS)` | `ASERRIN` | `ASERRIN` | 86 | 11,22 |
+| 3000042 | `VIRUTA-ASERUTA (TS)` | `VIRUTA` | `VIRUTA` | 5 | 8,93 |
+| 3009002 | `ASTILLA VERDE CON CORTEZA (TS)` | — | — | 29 | 9,42 |
+| 3009003 | `ASTILLA VERDE OTRA ESPECIE MAD` | — | — | 40 | 15,83 |
+| — | — | `COMBUSTIBLE` | — | — | — |
+
+Tres cosas que se ven en esa tabla y conviene tener presentes:
+
+- **Aserrín y viruta son materiales distintos en SAP** (`ASERRIN (TS)` y
+  `VIRUTA-ASERUTA (TS)`), con factores que no se parecen: 11,22 contra 8,93.
+- Las dos astillas que SAP separa (`CON CORTEZA`, `OTRA ESPECIE`) **no se
+  mezclan** con la astilla verde: 9,42 y 15,83 contra 11,32. Quedan en su
+  propia fila hasta que el negocio decida lo contrario; para juntarlas basta
+  escribir `ASTILLA VERDE` en su columna `Producto Plan`.
+- **`COMBUSTIBLE` no existe como material en SAP ni como línea del Plan.** Sus
+  camiones se cuentan y se muestran en 0 TS, no desaparecen.
 
 Con el nombre crudo eso rompe dos cosas, las dos sin avisar: el control abre
 una fila por cada forma de escribirlo (la misma viruta partida en tres, ninguna
