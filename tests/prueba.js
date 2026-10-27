@@ -134,7 +134,7 @@ global.HtmlService = {
 
 // --- Carga del código del proyecto ----------------------------------------
 const fs = require('fs');
-const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Productos.gs','Motor.gs','Control.gs','Tablero.gs','Triggers.gs','Menu.gs'];
+const archivos = ['Config.gs','Util.gs','Feriados.gs','Datos.gs','Importar.gs','Promedios.gs','Homologacion.gs','Productos.gs','Motor.gs','Faltantes.gs','Control.gs','Tablero.gs','Triggers.gs','Menu.gs'];
 const codigo = archivos.map(f => fs.readFileSync(__dirname + '/../apps-script/' + f, 'utf8')).join('\n');
 // Los 'const' del proyecto quedan dentro del ámbito del eval: se expone un
 // ayudante para poder tocar la configuración desde la prueba.
@@ -202,6 +202,14 @@ imprimir('homologacion', 5);
 guardarHomologacion([{ planilla: 'CSC', sap: '', plan: 'CSC LTDA.' }]);
 
 // --- Control ---------------------------------------------------------------
+// El export de SAP de este escenario llega sólo hasta el 07-10 y hay camiones
+// hasta el 17: con el vencimiento puesto, medio mes quedaría fuera y las
+// verificaciones del cruce no se verían. Así que este bloque prueba el cruce
+// puro (sin vencimiento) y el vencimiento tiene su propio bloque más abajo.
+assert(leerConfig('DIAS_GRACIA_SIN_CRUCE') === 0,
+  'de fábrica sólo se complementan los camiones que SAP todavía no alcanzó');
+ajustarConfig('DIAS_GRACIA_SIN_CRUCE', null);
+
 const resumen = actualizarControl('oct-2026');
 console.log('\nResumen: ' + JSON.stringify(resumen));
 imprimir('Control Ingreso', 17);
@@ -310,10 +318,13 @@ const virutaGuivarControl = control.slice(6).filter(f =>
 assert(virutaGuivarControl.length === 1,
   'el nombre de SAP y el de la planilla caen en UNA fila, no en tres');
 
+// Por nombre de columna, no por índice: el control gana columnas cada tanto.
 const vg = virutaGuivarControl[0] || [];
-assert(vg[3] === 2 && vg[4] === 1 && vg[5] === 1 && vg[7] === 1,
+const col = nombre => vg[encabezado.indexOf(nombre)];
+assert(col('Camiones planilla') === 2 && col('Camiones en SAP') === 1 &&
+  col('Camiones pendientes') === 1 && col('Cargas sólo SAP') === 1,
   'la fila junta los 2 camiones de la planilla, el que cruza, el pendiente y la carga sólo SAP');
-assert(vg[8] === 15.6 && vg[12] === 60,
+assert(col('TS real SAP') === 15.6 && col('Plan TS') === 60,
   'la viruta se compara contra el plan de viruta (60 TS), no contra el de astilla');
 
 const variante = detalle.find(f => String(f[6]) === '60590') || [];
@@ -443,6 +454,114 @@ assert(sinHoja.hojas[0].hoja === 'SEPTIEMBRE 2026', 'se trae la hoja más recien
 assert(sinHoja.aviso.indexOf('oct-2026') >= 0, 'avisa que falta la hoja del mes en curso');
 console.log('aviso: ' + sinHoja.aviso);
 hojaOctubre.nombre = 'OCTUBRE 2026';
+
+// --- Guías que SAP nunca trajo ---------------------------------------------
+// SAP llega hasta el 07-10 en este escenario. Con el vencimiento puesto, los
+// camiones anteriores a esa fecha que no cruzaron dejan de contarse; los
+// posteriores siguen siendo desfase legítimo y se estiman.
+console.log('\n--- guías que SAP nunca trajo ---');
+
+// El bloque anterior dejó importado septiembre: se vuelve a traer octubre.
+ajustarConfig('DIAS_GRACIA_SIN_CRUCE', 0);
+importarPlanillaOrigen();
+actualizarControl('oct-2026');
+
+const faltantes = libro.getSheetByName('guias faltantes').datos;
+const encFalt = faltantes[0];
+const colFalt = nombre => encFalt.indexOf(nombre);
+const detalle2 = libro.getSheetByName('Detalle Camiones').datos;
+const control2 = libro.getSheetByName('Control Ingreso').datos;
+
+assert(faltantes.length > 1, 'se abre la hoja con una fila por guía sin cruzar');
+assert(['Fecha','Proveedor planilla','Proveedor SAP','Producto','Nº guía','Patente',
+  'Nº ticket','Días sin cruzar','Guía SAP sin cruzar','TS que se dejan de contar',
+  'Acción','Estado'].every((t, i) => encFalt[i] === t),
+  'la hoja trae el detalle completo: fecha, proveedor, producto, guía, patente, ticket');
+
+// El camión del 02-10 de GUIVAR: SAP ya llegó al 07 y su guía sigue sin estar.
+const vencido = detalle2.find(f => String(f[6]) === '53999') || [];
+assert(vencido[10] === 'NO CONTADA (guía que SAP nunca trajo)' && vencido[11] === 0,
+  'una guía que SAP ya pasó de largo deja de contarse');
+assert(String(vencido[12]).indexOf('SAP ya llegó hasta el 2026-10-07') >= 0,
+  'y el detalle dice hasta dónde llegó SAP y cuántos días lleva sin aparecer');
+
+// El del 10-10 es posterior al corte: sigue siendo desfase y se estima.
+const alDia = detalle2.find(f => String(f[6]) === '53850') || [];
+assert(alDia[10] === 'PENDIENTE (estimado)' && alDia[11] === 13,
+  'un camión que SAP todavía no alcanzó se complementa igual con la planilla');
+
+const filaFaltante = faltantes.slice(1).find(f =>
+  String(f[colFalt('Nº guía')]) === '53999') || [];
+assert(filaFaltante.length > 0, 'la guía vencida queda listada');
+assert(String(filaFaltante[colFalt('Proveedor planilla')]) === 'GUIVAR' &&
+  String(filaFaltante[colFalt('Producto')]) === 'ASTILLA VERDE',
+  'con su proveedor y producto, para poder ir a buscar el papel');
+assert(filaFaltante[colFalt('Días sin cruzar')] === 5,
+  'y cuántos días lleva sin cruzar (02-10 contra el corte del 07-10)');
+assert(String(filaFaltante[colFalt('Guía SAP sin cruzar')]) === '53793',
+  'más la guía que SAP tiene suelta y podría ser este mismo camión');
+assert(filaFaltante[colFalt('TS que se dejan de contar')] === 13,
+  'y cuántas TS se están dejando fuera');
+
+const encControl2 = control2[5];
+const filaGuivar2 = control2.slice(6).find(f =>
+  String(f[0]) === 'ASTILLA VERDE' && String(f[1]) === 'COMERCIAL GUIVAR LTDA.') || [];
+assert(filaGuivar2[encControl2.indexOf('Camiones no contados')] === 1,
+  'el control cuenta aparte los camiones que quedaron fuera');
+assert(String(filaGuivar2[encControl2.indexOf('Alertas')]).indexOf('SAP nunca trajo') >= 0,
+  'y lo avisa con las TS que quedaron fuera del cálculo');
+
+// La decisión a mano manda sobre la regla.
+const hojaFalt = libro.getSheetByName('guias faltantes');
+hojaFalt.datos[faltantes.indexOf(filaFaltante)][colFalt('Acción')] = 'contar';
+actualizarControl('oct-2026');
+
+const rescatado = libro.getSheetByName('Detalle Camiones').datos
+  .find(f => String(f[6]) === '53999') || [];
+assert(rescatado[10] === 'PENDIENTE (estimado)' && rescatado[11] === 13,
+  'escribir CONTAR en la hoja rescata el camión, aunque la regla lo dé por vencido');
+assert(String(rescatado[12]).indexOf('por decisión en') >= 0,
+  'y el detalle deja constancia de que fue una decisión a mano');
+
+// Y al revés: NO CONTAR saca un camión que la regla sí contaría.
+hojaFalt.datos[faltantes.indexOf(filaFaltante)][colFalt('Acción')] = '';
+const filaAlDia = faltantes.slice(1).find(f =>
+  String(f[colFalt('Nº guía')]) === '53850');
+assert(filaAlDia, 'los camiones que sí se cuentan también quedan listados, para poder sacarlos');
+filaAlDia[colFalt('Acción')] = 'NO CONTAR';
+actualizarControl('oct-2026');
+
+const excluido = libro.getSheetByName('Detalle Camiones').datos
+  .find(f => String(f[6]) === '53850') || [];
+assert(excluido[10] === 'NO CONTADA (guía que SAP nunca trajo)' && excluido[11] === 0,
+  'escribir NO CONTAR saca el camión aunque SAP todavía no lo haya alcanzado');
+
+// La hoja no puede crecer sola: la llave de cada fila tiene que ser la misma
+// al leerla y al escribirla, o cada pasada agregaría todo de nuevo.
+filaAlDia[colFalt('Acción')] = '';
+const antesDePasadas = libro.getSheetByName('guias faltantes').datos.length;
+actualizarControl('oct-2026');
+actualizarControl('oct-2026');
+assert(libro.getSheetByName('guias faltantes').datos.length === antesDePasadas,
+  'recalcular de nuevo no vuelve a agregar las mismas guías');
+
+const guias = libro.getSheetByName('guias faltantes').datos.slice(1)
+  .map(f => String(f[colFalt('Proveedor planilla')]) + '|' +
+            String(f[colFalt('Producto')]) + '|' + String(f[colFalt('Nº guía')]));
+assert(new Set(guias).size === guias.length, 'y no quedan filas repetidas');
+
+// Un export atrasado no puede dejar el mes en cero: el vencimiento se mide
+// contra el corte de SAP, no contra hoy.
+assert(!guiaVencida(new Date(2026, 9, 20), new Date(2026, 9, 7)),
+  'un camión posterior al corte de SAP no vence, por antiguo que sea respecto de hoy');
+assert(guiaVencida(new Date(2026, 9, 2), new Date(2026, 9, 7)),
+  'uno anterior al corte sí');
+ajustarConfig('DIAS_GRACIA_SIN_CRUCE', 5);
+assert(!guiaVencida(new Date(2026, 9, 3), new Date(2026, 9, 7)),
+  'con 5 días de gracia, uno del 03 contra un corte del 07 todavía no vence');
+ajustarConfig('DIAS_GRACIA_SIN_CRUCE', null);
+assert(!guiaVencida(new Date(2026, 0, 2), new Date(2026, 9, 7)),
+  'con el vencimiento apagado no vence nunca');
 
 // --- Recálculo al editar ---------------------------------------------------
 console.log('\n--- actualización al editar una fila ---');

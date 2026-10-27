@@ -32,6 +32,7 @@ function resolverIngresos(libro) {
   const plan = cargarPlan(libro);
   const homologacion = cargarHomologacion(libro);
   const homologacionProductos = cargarHomologacionProductos(libro);
+  const faltantes = cargarGuiasFaltantes(libro);
   const promedios = calcularPromedios(sap);
 
   // ---- 1) Cruce por proveedor + material + guía ---------------------------
@@ -79,6 +80,9 @@ function resolverIngresos(libro) {
     let detalleFuente = '';
     let promedioUsado = 0;
     let revisarGuia = false;
+    let sinCruzar = false;
+    let contada = true;
+    let tsSinContar = 0;
 
     if (cargaSap) {
       estado = ESTADO.EN_SAP;
@@ -92,15 +96,30 @@ function resolverIngresos(libro) {
       fuente = 'SIN DATO';
       detalleFuente = 'sin homologar';
     } else {
+      sinCruzar = true;
+
       const referencia = promedioPara(
         promedios, equivalencia.sap, material.canonico, material.sap);
+      const decision = decidirSiSeCuenta(
+        faltantes, equivalencia, material, fila, promedios.corteGlobal);
+
       promedioUsado = referencia.promedio;
-      cantidad = referencia.promedio;
-      fuente = referencia.promedio > 0 ? 'ESTIMADO' : 'SIN DATO';
-      detalleFuente = 'estimado - ' + referencia.origen;
-      if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
-      else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
-      else estado = ESTADO.PENDIENTE;
+      contada = decision.contar;
+      tsSinContar = decision.contar ? 0 : referencia.promedio;
+      cantidad = decision.contar ? referencia.promedio : 0;
+
+      if (!decision.contar) {
+        estado = ESTADO.NO_CONTADA;
+        fuente = 'SIN DATO';
+        detalleFuente = decision.motivo;
+      } else {
+        fuente = referencia.promedio > 0 ? 'ESTIMADO' : 'SIN DATO';
+        detalleFuente = 'estimado - ' + referencia.origen;
+        if (decision.motivo) detalleFuente += ' - ' + decision.motivo;
+        if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
+        else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
+        else estado = ESTADO.PENDIENTE;
+      }
 
       if (item.sospecha) {
         revisarGuia = true;
@@ -121,6 +140,9 @@ function resolverIngresos(libro) {
         fuente = 'SIN DATO';
         cantidad = 0;
         revisarGuia = false;
+        // Un duplicado no es una guía que falte: es la misma dos veces.
+        sinCruzar = false;
+        tsSinContar = 0;
       }
       guiasVistas[claveDuplicado] = true;
     }
@@ -135,6 +157,9 @@ function resolverIngresos(libro) {
       duplicado: duplicado,
       revisarGuia: revisarGuia,
       guiaSospechosa: item.sospecha ? item.sospecha.guia : '',
+      sinCruzar: sinCruzar,
+      contada: contada,
+      tsSinContar: tsSinContar,
       producto: fila.producto,
       productoCorto: material.canonico,
       productoSap: material.sap,
@@ -181,6 +206,9 @@ function resolverIngresos(libro) {
       duplicado: false,
       revisarGuia: false,
       guiaSospechosa: '',
+      sinCruzar: false,
+      contada: true,
+      tsSinContar: 0,
       producto: carga.material,
       productoCorto: nombreProducto,
       productoSap: carga.material,
@@ -214,8 +242,45 @@ function resolverIngresos(libro) {
     plan: plan,
     homologacion: homologacion,
     homologacionProductos: homologacionProductos,
+    faltantes: faltantes,
     promedios: promedios
   };
+}
+
+/**
+ * ¿Se complementa este camión con la planilla, o se deja fuera?
+ *
+ * Primero manda lo que esté escrito a mano en 'guias faltantes'. Si ahí no hay
+ * nada, decide la regla: un camión que SAP todavía no alcanzó es desfase y se
+ * cuenta; uno que SAP ya pasó de largo hace días, no.
+ */
+function decidirSiSeCuenta(faltantes, equivalencia, material, fila, corteSap) {
+  const clave = claveCarga(
+    equivalencia.sap || fila.proveedor,
+    material.sap || material.canonico,
+    fila.guia
+  );
+  const registro = faltantes.porCarga[clave];
+
+  if (registro && registro.accion === ACCION_GUIA.CONTAR) {
+    return { contar: true, motivo: 'se cuenta por decisión en "' +
+      CONFIG.HOJA_GUIAS_FALTANTES + '"' };
+  }
+  if (registro && registro.accion === ACCION_GUIA.NO_CONTAR) {
+    return { contar: false, motivo: 'no se cuenta por decisión en "' +
+      CONFIG.HOJA_GUIAS_FALTANTES + '"' };
+  }
+
+  if (guiaVencida(fila.fecha, corteSap)) {
+    return {
+      contar: false,
+      motivo: 'SAP ya llegó hasta el ' + claveFecha(corteSap) + ' y esta guía ' +
+        'sigue sin aparecer (' + diasSinCruzar(fila.fecha, corteSap) + ' días): ' +
+        'no se cuenta. Revisar en "' + CONFIG.HOJA_GUIAS_FALTANTES + '"'
+    };
+  }
+
+  return { contar: true, motivo: '' };
 }
 
 /**

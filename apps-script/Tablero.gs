@@ -81,6 +81,9 @@ function getDashboardData() {
       sinHomologar: fila.sinHomologar,
       duplicado: fila.duplicado,
       revisarGuia: fila.revisarGuia,
+      sinCruzar: fila.sinCruzar,
+      contada: fila.contada,
+      tsSinContar: redondear(fila.tsSinContar, 3),
       observacion: fila.observacion
     });
 
@@ -224,6 +227,7 @@ function listaPromedios_(promedios) {
 function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
   const sinHomologar = {};
   const revisarGuia = {};
+  const noContadas = {};
   const sinPlan = {};
   // Productos escritos a mano que no encontraron par en SAP ni en el Plan: son
   // los que dejan camiones en cero sin que se vea el motivo.
@@ -245,6 +249,11 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
     if (fila.estado === ESTADO.SIN_HOMOLOGAR) {
       sinHomologar[fila.proveedorPlanilla] =
         (sinHomologar[fila.proveedorPlanilla] || 0) + 1;
+    }
+
+    if (fila.estado === ESTADO.NO_CONTADA) {
+      const quien = fila.proveedor || fila.proveedorPlanilla;
+      noContadas[quien] = (noContadas[quien] || 0) + 1;
     }
 
     if (fila.revisarGuia) {
@@ -320,6 +329,9 @@ function resumenFuente_(datos, propiedades, importacion, historiaDesde, mes) {
     proveedoresPlan: datos.plan.proveedores,
     sinHomologar: aLista(sinHomologar, 'camiones'),
     revisarGuia: aLista(revisarGuia, 'camiones'),
+    noContadas: aLista(noContadas, 'camiones'),
+    hojaFaltantes: CONFIG.HOJA_GUIAS_FALTANTES,
+    diasGracia: CONFIG.DIAS_GRACIA_SIN_CRUCE,
     sinPlan: aLista(sinPlan, 'ts'),
     duplicados: duplicados,
     homologacion: {

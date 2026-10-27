@@ -33,7 +33,8 @@ const MINUTOS_PENDIENTE_VENCIDO = 10;
 /** Hojas de este archivo cuyas ediciones obligan a recalcular. */
 function hojasQueDisparan() {
   return [CONFIG.HOJA_PLANILLA, CONFIG.HOJA_HOMOLOGACION,
-    CONFIG.HOJA_HOMOLOGACION_PRODUCTOS, CONFIG.HOJA_PLAN, CONFIG.HOJA_SAP];
+    CONFIG.HOJA_HOMOLOGACION_PRODUCTOS, CONFIG.HOJA_GUIAS_FALTANTES,
+    CONFIG.HOJA_PLAN, CONFIG.HOJA_SAP];
 }
 
 /** ¿Una edición en esta hoja cambia el resultado del control? */

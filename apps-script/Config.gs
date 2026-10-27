@@ -36,6 +36,7 @@ const CONFIG = {
   HOJA_PLAN: 'Plan',
   HOJA_HOMOLOGACION: 'homologacion',
   HOJA_HOMOLOGACION_PRODUCTOS: 'homologacion productos',
+  HOJA_GUIAS_FALTANTES: 'guias faltantes',
   HOJA_CONTROL: 'Control Ingreso',
   HOJA_DETALLE: 'Detalle Camiones',
   HOJA_PROMEDIOS: 'Promedios SAP',
@@ -80,6 +81,25 @@ const CONFIG = {
   // están más separadas que esto: el desfase entre el ingreso físico y la
   // contabilización SAP es de días, no de semanas.
   DIAS_SOSPECHA_GUIA: 15,
+
+  // --- Guías que SAP nunca trajo ---------------------------------------------
+  // Un camión que entró hoy todavía no puede estar en SAP: las cinco fases
+  // tardan. Pero uno de hace días que SIGUE sin aparecer ya no es desfase, es
+  // un problema: la guía está escrita distinta, la carga se anuló, o nunca va
+  // a llegar. Estimarlo infla el mes con volumen que no existe.
+  //
+  // El vencimiento se mide contra la última 'Fecha Contab.' que trae el export
+  // de SAP, NO contra hoy: si el export quedó atrasado diez días, medir contra
+  // hoy daría por vencido todo el mes y el control se iría a cero. Contra el
+  // corte del export, un export atrasado simplemente estima más días, que es
+  // lo correcto.
+  //
+  //   0    = se complementan sólo los camiones que SAP todavía no alcanzó
+  //   N    = además los de los N días anteriores al corte
+  //   null = no vence nunca; se complementan todos
+  //
+  // Lo que se escriba a mano en la hoja 'guias faltantes' manda sobre esto.
+  DIAS_GRACIA_SIN_CRUCE: 0,
 
   // --- Homologación --------------------------------------------------------
   // Puntaje mínimo (0 a 1) para proponer una homologación automática.
@@ -164,7 +184,24 @@ const COLUMNAS = {
     sap: ['Producto SAP', 'Material SAP'],
     planilla: ['Producto Planilla'],
     plan: ['Producto Plan']
+  },
+  GUIAS_FALTANTES: {
+    fecha: ['Fecha'],
+    proveedor: ['Proveedor planilla'],
+    proveedorSap: ['Proveedor SAP'],
+    producto: ['Producto'],
+    guia: ['Nº guía', 'N guia', 'Guia'],
+    accion: ['Acción', 'Accion', 'Decisión', 'Decision']
   }
+};
+
+/**
+ * Lo que se puede escribir en la columna 'Acción' de 'guias faltantes'.
+ * Vacío = manda la regla de CONFIG.DIAS_GRACIA_SIN_CRUCE.
+ */
+const ACCION_GUIA = {
+  CONTAR: 'CONTAR',
+  NO_CONTAR: 'NO CONTAR'
 };
 
 /** Estados posibles de un camión de la planilla manual. */
@@ -176,5 +213,6 @@ const ESTADO = {
   PRODUCTO_SIN_HOMOLOGAR: 'PRODUCTO SIN HOMOLOGAR',
   SIN_SAP: 'PENDIENTE (proveedor sin historial SAP)',
   SOLO_SAP: 'SOLO SAP',
+  NO_CONTADA: 'NO CONTADA (guía que SAP nunca trajo)',
   DUPLICADO: 'GUIA DUPLICADA'
 };

@@ -56,9 +56,12 @@ contar dos veces el mismo camión.
    números de guía se repiten: entre proveedores, y dentro de un mismo
    proveedor entre materiales.
    - Guía encontrada → **EN SAP**, cantidad real de esa carga.
-   - Guía no encontrada → **PENDIENTE**, se complementa con la planilla y se
-     valoriza con el promedio `TS/carga` del material (1 camión × promedio).
-     La fecha no interviene; ver "La regla del cruce" más abajo.
+   - Guía no encontrada y SAP todavía no llegó a esa fecha → **PENDIENTE**, se
+     complementa con la planilla y se valoriza con el promedio `TS/carga` del
+     material (1 camión × promedio).
+   - Guía no encontrada y SAP ya pasó de largo → **NO CONTADA**, suma 0 TS y
+     queda listada en `guias faltantes` para decidirla a mano. Ver "Guías que
+     SAP nunca trajo" más abajo.
 3. **Una carga = un camión = una guía.** Antes de promediar, las líneas de SAP
    se agrupan por `proveedor + material + guía`: una misma guía puede venir en dos
    posiciones del pedido y, contada línea por línea, el promedio por carga
@@ -132,6 +135,61 @@ guía en la planilla hace que las dos se junten en la próxima pasada.
 
 El `SAP hasta` del control sigue mostrando la última fecha contabilizada de
 cada proveedor, pero ahora es sólo información: ya no decide nada.
+
+## Guías que SAP nunca trajo
+
+Hay una asimetría entre un camión de hoy y uno de hace días:
+
+- El de **hoy** todavía no puede estar en SAP: la información pasa por cinco
+  fases. Ese se complementa con la planilla, y para eso existe este control.
+- El de **hace días** que sigue sin aparecer ya no es desfase. O la guía está
+  escrita distinta en cada sistema, o la carga se anuló, o nunca va a llegar.
+  Estimarlo mes a mes infla el avance con volumen que no existe, y nadie se da
+  cuenta porque se ve igual que los demás pendientes.
+
+Por eso esos camiones **no se cuentan** y se juntan en la hoja
+**`guias faltantes`**, con la misma mecánica que las homologaciones: el script
+propone y la persona decide.
+
+| Columna | Para qué |
+|---|---|
+| Fecha, Proveedor planilla, Proveedor SAP, Producto | de qué camión se habla |
+| Nº guía, Patente, Nº ticket | con qué ir a buscar el papel |
+| Días sin cruzar | cuánto lleva esperando (vacío = SAP todavía no llega a su fecha) |
+| Guía SAP sin cruzar | la guía que SAP tiene suelta y podría ser este mismo camión |
+| TS que se dejan de contar | cuánto volumen queda fuera |
+| **Acción** | lo que se decide: vacío = la regla, `CONTAR`, `NO CONTAR` |
+| Estado | qué está pasando con esa fila (lo escribe el script) |
+
+Lo que se escribe en `Acción` manda sobre la regla. Una guía que después se
+corrige y cruza no se borra de la hoja: queda con `Ya cruzó en SAP`, que es
+justo lo que se quiere ver al revisar.
+
+### El vencimiento se mide contra SAP, no contra hoy
+
+`CONFIG.DIAS_GRACIA_SIN_CRUCE` dice cuántos días de atraso se toleran:
+
+- `0` (de fábrica) → se complementan sólo los camiones que SAP todavía no
+  alcanzó.
+- `N` → además los de los N días anteriores al corte.
+- `null` → no vence nunca; se complementan todos.
+
+La referencia es la **última `Fecha Contab.` del export de SAP**, no la fecha
+de hoy. Si se midiera contra hoy y el export quedara atrasado diez días, todo
+el mes se daría por vencido y el control se iría a cero justo cuando lo que
+falta es refrescar el export. Contra el corte de SAP, un export atrasado
+simplemente estima más días, que es lo correcto.
+
+> Esto se parece al corte por proveedor que se quitó, y conviene ver en qué se
+> diferencia. Aquel era **por proveedor** —así que un proveedor con filas
+> sueltas en SAP quedaba arruinado—, botaba a cero **en silencio** y no se
+> podía discutir. Este es **global** (robusto frente a los huecos), tiene
+> gracia configurable, deja cada camión **listado con su detalle**, y la
+> decisión de la persona está por encima.
+>
+> El riesgo que queda: un proveedor que SAP siempre carga tres semanas tarde
+> va a aparecer vencido. Para eso están los días de gracia y el `CONTAR` de la
+> hoja, que es permanente.
 
 ## Productos
 

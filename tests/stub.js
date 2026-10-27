@@ -36,6 +36,7 @@ class Hoja {
   clear() { this.datos = []; return this; }
   clearContents() { this.datos = []; return this; }
   setFrozenRows() { return this; }
+  getMaxRows() { return Math.max(1000, this.datos.length); }
   autoResizeColumns() { return this; }
   setColumnWidth() { return this; }
   setConditionalFormatRules() { return this; }

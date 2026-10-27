@@ -1565,6 +1565,17 @@
           '<b>homologacion productos</b>.');
       }
 
+      if ((f.noContadas || []).length) {
+        var nc = f.noContadas.reduce(function (t, x) { return t + x.camiones; }, 0);
+
+        ojo.push('<b>' + entero(nc) + ' camión(es)</b> tienen una guía que SAP ya ' +
+          'pasó de largo: <b>no se están contando</b>. Un camión de hoy todavía ' +
+          'no puede estar en SAP, pero uno de hace días que sigue sin aparecer ' +
+          'ya no es desfase. Están uno por uno en la hoja <b>' +
+          esc(f.hojaFaltantes || 'guias faltantes') + '</b>, y ahí mismo se ' +
+          'decide cuál sí contar.');
+      }
+
       if ((f.revisarGuia || []).length) {
         var sc = f.revisarGuia.reduce(function (t, x) { return t + x.camiones; }, 0);
 
@@ -1817,6 +1828,7 @@
       var pendientes = 0;
       var soloSap = 0;
       var revisar = 0;
+      var noContadas = 0;
       var sinHomologar = 0;
       var sinPromedio = 0;
       var costo = 0;
@@ -1832,6 +1844,7 @@
           if (f.estado === 'EN SAP') enSap++;
           else if (f.fuente === 'ESTIMADO') pendientes++;
           if (f.revisarGuia) revisar++;
+          if (f.sinCruzar && !f.contada) noContadas++;
           else if (f.estado === 'SIN HOMOLOGAR') sinHomologar++;
           else if (String(f.estado).indexOf('PENDIENTE SIN PROMEDIO') === 0) {
             sinPromedio++;
@@ -1869,6 +1882,7 @@
         pendientes: pendientes,
         soloSap: soloSap,
         sinCruce: revisar,
+        noContadas: noContadas,
         sinHomologar: sinHomologar,
         sinPromedio: sinPromedio,
         planMes: planMes,
@@ -1914,7 +1928,7 @@
         if (!cubos[k]) {
           cubos[k] = {
             producto: prod, proveedor: nombre, proveedorSap: '', camiones: 0,
-            enSap: 0, pendientes: 0, sinCruce: 0, sinHomologar: 0, soloSap: 0,
+            enSap: 0, pendientes: 0, sinCruce: 0, noContadas: 0, sinHomologar: 0, soloSap: 0,
             tsReal: 0, tsEstimada: 0, total: 0, costo: 0, tsConPrecio: 0,
             factor: 0, precio: null, planMes: 0, dias: {}, ultimo: '',
             sinPlan: false, sinPromedio: 0, corte: ''
@@ -1936,6 +1950,7 @@
           if (f.estado === 'EN SAP') x.enSap++;
           else if (f.fuente === 'ESTIMADO') x.pendientes++;
           if (f.revisarGuia) x.sinCruce++;
+          if (f.sinCruzar && !f.contada) x.noContadas++;
           else if (f.estado === 'SIN HOMOLOGAR') x.sinHomologar++;
           else if (String(f.estado).indexOf('PENDIENTE SIN PROMEDIO') === 0) {
             x.sinPromedio++;
@@ -2270,6 +2285,13 @@
         lista.push({ nivel: 'mal',
           texto: 'Hay camiones cuyo proveedor no cruza: suman cero TS.',
           valor: entero(m.sinHomologar) + ' camiones' });
+      }
+
+      if (m.noContadas) {
+        lista.push({ nivel: 'ojo',
+          texto: 'Guías que SAP ya pasó de largo: no se cuentan. Se deciden una ' +
+            'por una en la hoja de guías faltantes.',
+          valor: entero(m.noContadas) + ' camiones' });
       }
 
       if (m.sinCruce) {

@@ -19,8 +19,13 @@ function actualizarControl(periodoSolicitado) {
 
   escribirHojaControl(libro, agregados, periodo, datos);
   escribirHojaDetalle(libro, datos.filas);
+  // Se sincroniza DESPUÉS del cruce, porque la hoja lista su resultado. Las
+  // filas nuevas salen con 'Acción' vacía, así que agregarlas no cambia lo que
+  // se acaba de calcular: no hay vuelta atrás.
+  const faltantes = sincronizarGuiasFaltantes(libro, datos);
 
   return {
+    faltantes: faltantes,
     periodo: periodo,
     proveedores: Object.keys(agregados).length,
     camionesPlanilla: datos.planilla.filas.length,
@@ -57,6 +62,9 @@ function agregarPorProveedor(datos, periodo) {
       agregado.tsSap += fila.ts;
     } else if (fila.estado === ESTADO.SIN_HOMOLOGAR) {
       agregado.camionesSinHomologar++;
+    } else if (fila.estado === ESTADO.NO_CONTADA) {
+      agregado.camionesNoContados++;
+      agregado.tsSinContar += fila.tsSinContar;
     } else {
       agregado.camionesPendientes++;
       agregado.tsEstimada += fila.ts;
@@ -101,6 +109,8 @@ function nuevoAgregado(producto, proveedorPlan, proveedorSap, materialSap) {
     camionesEnSap: 0,
     camionesPendientes: 0,
     camionesRevisarGuia: 0,
+    camionesNoContados: 0,
+    tsSinContar: 0,
     camionesSinHomologar: 0,
     camionesSinPromedio: 0,
     camionesSoloSap: 0,
@@ -170,7 +180,7 @@ function periodoSeleccionado(libro, plan) {
 const ENCABEZADOS_CONTROL = [
   'Producto', 'Proveedor (Plan)', 'Proveedor SAP',
   'Camiones planilla', 'Camiones en SAP', 'Camiones pendientes', 'Camiones a revisar',
-  'Cargas sólo SAP', 'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes',
+  'Camiones no contados', 'Cargas sólo SAP', 'TS real SAP', 'TS/carga prom.', 'TS estimada pendientes',
   'TS proyectada', 'Plan TS', 'Avance %', 'Desvío TS', 'Precio', 'Monto proyectado',
   'SAP hasta', 'Alertas'
 ];
@@ -269,6 +279,11 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
       alertas.push(dato.camionesSinPromedio + ' pendiente(s) sin histórico SAP ' +
         'de este producto: suman 0 TS');
     }
+    if (dato.camionesNoContados) {
+      alertas.push(dato.camionesNoContados + ' guía(s) que SAP nunca trajo: ' +
+        redondear(dato.tsSinContar, 1) + ' TS fuera del cálculo, ver "' +
+        CONFIG.HOJA_GUIAS_FALTANTES + '"');
+    }
     if (dato.camionesRevisarGuia) {
       alertas.push(dato.camionesRevisarGuia + ' camión(es) estimado(s) que ' +
         'calzan con una carga de SAP sin cruzar: revisar el Nº de guía');
@@ -287,6 +302,7 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
       dato.camionesEnSap,
       dato.camionesPendientes,
       dato.camionesRevisarGuia,
+      dato.camionesNoContados,
       dato.camionesSoloSap,
       redondear(tsReal, 3),
       redondear(factor, 3),

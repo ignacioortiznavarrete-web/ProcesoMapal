@@ -12,6 +12,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Actualizar todo (traer + control)', 'accionActualizarTodo')
     .addItem('Detectar proveedores y productos nuevos', 'accionSincronizarHomologacion')
+    .addItem('Revisar guías que SAP nunca trajo', 'accionGuiasFaltantes')
     .addSeparator()
     .addItem('Recalcular ahora (ediciones pendientes)', 'accionRecalcularPendiente')
     .addSeparator()
@@ -70,7 +71,11 @@ function accionActualizarTodo() {
     const resultado = actualizarTodo();
     SpreadsheetApp.getUi().alert(
       resumenImportacion(resultado.importacion) + '\n\n' +
-      'Control del período ' + etiquetaMes(resultado.control.periodo) + ' recalculado.'
+      'Control del período ' + etiquetaMes(resultado.control.periodo) + ' recalculado.' +
+      (resultado.control.faltantes && resultado.control.faltantes.agregadas
+        ? '\n\n' + resultado.control.faltantes.agregadas + ' guía(s) nueva(s) sin cruzar en "' +
+          CONFIG.HOJA_GUIAS_FALTANTES + '".'
+        : '')
     );
   } catch (error) {
     SpreadsheetApp.getUi().alert('Falló la actualización:\n\n' + error.message);
@@ -111,7 +116,7 @@ function verificarInstalacion() {
   const lineas = ['Versión del código: ' + VERSION, ''];
 
   [CONFIG.HOJA_SAP, CONFIG.HOJA_PLANILLA, CONFIG.HOJA_PLAN, CONFIG.HOJA_HOMOLOGACION,
-   CONFIG.HOJA_HOMOLOGACION_PRODUCTOS]
+   CONFIG.HOJA_HOMOLOGACION_PRODUCTOS, CONFIG.HOJA_GUIAS_FALTANTES]
     .forEach(function (nombre) {
       const hoja = libro.getSheetByName(nombre);
       lineas.push(hoja
@@ -167,6 +172,34 @@ function accionRecalcularPendiente() {
       : 'Hay otra actualización en curso; el recálculo quedó reprogramado.');
   } catch (error) {
     SpreadsheetApp.getUi().alert('No se pudo recalcular:\n\n' + error.message);
+  }
+}
+
+/** Abre la hoja de guías faltantes y cuenta en qué está. */
+function accionGuiasFaltantes() {
+  try {
+    const libro = SpreadsheetApp.getActiveSpreadsheet();
+    const datos = resolverIngresos(libro);
+    const resumen = sincronizarGuiasFaltantes(libro, datos);
+    const hoja = libro.getSheetByName(CONFIG.HOJA_GUIAS_FALTANTES);
+    if (hoja) libro.setActiveSheet(hoja);
+
+    const noContadas = datos.filas.filter(function (fila) {
+      return fila.sinCruzar && !fila.contada;
+    });
+    const tsFuera = noContadas.reduce(function (total, fila) {
+      return total + fila.tsSinContar;
+    }, 0);
+
+    SpreadsheetApp.getUi().alert(
+      resumen.sinCruzar + ' guía(s) de la planilla no están en SAP.\n' +
+      noContadas.length + ' no se están contando (' + redondear(tsFuera, 1) + ' TS fuera).\n' +
+      resumen.agregadas + ' fila(s) nueva(s) en la hoja.\n\n' +
+      'Escribe CONTAR o NO CONTAR en la columna "Acción" para decidir caso a caso. ' +
+      'Lo que escribas manda sobre la regla automática.'
+    );
+  } catch (error) {
+    SpreadsheetApp.getUi().alert('No se pudo revisar las guías:\n\n' + error.message);
   }
 }
 
