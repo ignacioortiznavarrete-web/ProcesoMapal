@@ -83,7 +83,7 @@ function getDashboardData() {
       revisarGuia: fila.revisarGuia,
       sinCruzar: fila.sinCruzar,
       contada: fila.contada,
-      tsSinContar: redondear(fila.tsSinContar, 3),
+      tsSinCruce: redondear(fila.tsSinCruce, 3),
       observacion: fila.observacion
     });
 

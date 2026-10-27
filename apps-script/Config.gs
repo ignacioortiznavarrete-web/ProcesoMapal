@@ -83,23 +83,27 @@ const CONFIG = {
   DIAS_SOSPECHA_GUIA: 15,
 
   // --- Guías que SAP nunca trajo ---------------------------------------------
-  // Un camión que entró hoy todavía no puede estar en SAP: las cinco fases
-  // tardan. Pero uno de hace días que SIGUE sin aparecer ya no es desfase, es
-  // un problema: la guía está escrita distinta, la carga se anuló, o nunca va
-  // a llegar. Estimarlo infla el mes con volumen que no existe.
+  // Un camión cuya guía no está en SAP se complementa con la planilla: se
+  // valoriza con el promedio TS/carga de las cargas que SÍ están en SAP de ese
+  // proveedor y material. Eso es el corazón del control y pasa SIEMPRE, sin
+  // importar la fecha: SAP no se carga en orden, así que una guía que falta
+  // hoy puede aparecer la semana que viene.
   //
-  // El vencimiento se mide contra la última 'Fecha Contab.' que trae el export
-  // de SAP, NO contra hoy: si el export quedó atrasado diez días, medir contra
-  // hoy daría por vencido todo el mes y el control se iría a cero. Contra el
-  // corte del export, un export atrasado simplemente estima más días, que es
-  // lo correcto.
+  // Igual queda listada en la hoja 'guias faltantes', con lo que está
+  // aportando, para poder revisarla y sacarla a mano si no corresponde.
   //
-  //   0    = se complementan sólo los camiones que SAP todavía no alcanzó
-  //   N    = además los de los N días anteriores al corte
-  //   null = no vence nunca; se complementan todos
+  // Este parámetro permite además dejar de contar las muy atrasadas, medidas
+  // contra la última 'Fecha Contab.' del export de SAP (no contra hoy: con un
+  // export atrasado, medir contra hoy daría por vencido el mes entero):
   //
-  // Lo que se escriba a mano en la hoja 'guias faltantes' manda sobre esto.
-  DIAS_GRACIA_SIN_CRUCE: 0,
+  //   null = de fábrica. No vence nunca; se complementan todas.
+  //   N    = dejan de contarse las anteriores a N días del corte del export.
+  //   0    = se complementan sólo las que SAP todavía no alcanzó.
+  //
+  // Antes de bajarlo de null, mirá la hoja: un proveedor sin ninguna carga en
+  // el export se quedaría en cero completo. Lo que se escriba a mano en la
+  // columna 'Acción' manda sobre este número.
+  DIAS_GRACIA_SIN_CRUCE: null,
 
   // --- Homologación --------------------------------------------------------
   // Puntaje mínimo (0 a 1) para proponer una homologación automática.

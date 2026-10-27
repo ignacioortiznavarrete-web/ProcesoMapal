@@ -82,7 +82,7 @@ function resolverIngresos(libro) {
     let revisarGuia = false;
     let sinCruzar = false;
     let contada = true;
-    let tsSinContar = 0;
+    let tsSinCruce = 0;
 
     if (cargaSap) {
       estado = ESTADO.EN_SAP;
@@ -105,7 +105,9 @@ function resolverIngresos(libro) {
 
       promedioUsado = referencia.promedio;
       contada = decision.contar;
-      tsSinContar = decision.contar ? 0 : referencia.promedio;
+      // Lo que vale este camión, se cuente o no: la hoja de revisión lo
+      // necesita para mostrar cuánto está aportando cada guía que falta.
+      tsSinCruce = referencia.promedio;
       cantidad = decision.contar ? referencia.promedio : 0;
 
       if (!decision.contar) {
@@ -142,7 +144,7 @@ function resolverIngresos(libro) {
         revisarGuia = false;
         // Un duplicado no es una guía que falte: es la misma dos veces.
         sinCruzar = false;
-        tsSinContar = 0;
+        tsSinCruce = 0;
       }
       guiasVistas[claveDuplicado] = true;
     }
@@ -159,7 +161,7 @@ function resolverIngresos(libro) {
       guiaSospechosa: item.sospecha ? item.sospecha.guia : '',
       sinCruzar: sinCruzar,
       contada: contada,
-      tsSinContar: tsSinContar,
+      tsSinCruce: tsSinCruce,
       producto: fila.producto,
       productoCorto: material.canonico,
       productoSap: material.sap,
@@ -208,7 +210,7 @@ function resolverIngresos(libro) {
       guiaSospechosa: '',
       sinCruzar: false,
       contada: true,
-      tsSinContar: 0,
+      tsSinCruce: 0,
       producto: carga.material,
       productoCorto: nombreProducto,
       productoSap: carga.material,

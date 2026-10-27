@@ -38,10 +38,11 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 - Cuando una carga de SAP queda sin cruzar y hay un camión sin cruzar del mismo
   proveedor y material en fechas cercanas, los empareja y marca **uno** para
   revisar el Nº de guía. Avisa; no recorta el mes.
-- Las guías que SAP ya pasó de largo **no se cuentan** y se juntan una por una
-  en la hoja `guias faltantes`, con su fecha, proveedor, producto, patente,
-  ticket, días de atraso y las TS que quedan fuera. Ahí se decide caso a caso
-  escribiendo `CONTAR` o `NO CONTAR`, y eso manda sobre la regla.
+- Las guías que no están en SAP **se complementan igual** con el promedio de
+  las que sí están, y quedan listadas una por una en la hoja `guias faltantes`
+  con su fecha, proveedor, producto, patente, ticket, días de atraso y las TS
+  que están aportando. Esa hoja no cambia nada por sí sola: es para revisar, y
+  ahí se saca a mano la que no corresponda escribiendo `NO CONTAR`.
 - Homologa los **nombres de producto** con la hoja `homologacion productos`:
   SAP escribe `VIRUTA-ASERUTA (TS)`, la planilla manual `viruta` y el Plan
   `VIRUTA`. Sin traducirlos, el mismo material abre tres filas distintas y el
@@ -119,7 +120,7 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
 | `TS_POR_CARGA_MINIMO` / `MAXIMO` | rango esperado por carga; fuera de él se avisa |
 | `FECHA_BASE` | `'PLANILLA'` (fecha de ingreso físico) o `'SAP'` |
 | `DIAS_SOSPECHA_GUIA` | distancia máxima para emparejar una carga suelta de SAP con un camión sin cruzar |
-| `DIAS_GRACIA_SIN_CRUCE` | días de atraso tolerados antes de dejar de contar una guía que SAP no trajo (`0` = sólo lo que SAP no alcanzó, `null` = contar siempre) |
+| `DIAS_GRACIA_SIN_CRUCE` | `null` (de fábrica) = se complementan todas las guías que falten; `N` = dejan de contarse las atrasadas más de N días respecto del corte del export |
 | `HORAS_ENTRE_ACTUALIZACIONES` | frecuencia del trigger horario (traer + recalcular) |
 | `SEGUNDOS_ESPERA_EDICION` | espera tras la última edición antes de recalcular (mínimo 30) |
 | `UMBRAL_SUGERENCIA` | exigencia para sugerir una homologación |

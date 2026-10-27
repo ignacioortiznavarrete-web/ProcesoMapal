@@ -188,7 +188,7 @@ function accionGuiasFaltantes() {
       return fila.sinCruzar && !fila.contada;
     });
     const tsFuera = noContadas.reduce(function (total, fila) {
-      return total + fila.tsSinContar;
+      return total + fila.tsSinCruce;
     }, 0);
 
     SpreadsheetApp.getUi().alert(

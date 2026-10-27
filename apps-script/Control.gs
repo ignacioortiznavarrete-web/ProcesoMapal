@@ -64,7 +64,7 @@ function agregarPorProveedor(datos, periodo) {
       agregado.camionesSinHomologar++;
     } else if (fila.estado === ESTADO.NO_CONTADA) {
       agregado.camionesNoContados++;
-      agregado.tsSinContar += fila.tsSinContar;
+      agregado.tsSinContar += fila.tsSinCruce;
     } else {
       agregado.camionesPendientes++;
       agregado.tsEstimada += fila.ts;

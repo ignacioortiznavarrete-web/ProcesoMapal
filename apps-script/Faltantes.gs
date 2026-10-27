@@ -27,7 +27,7 @@
 const ENCABEZADOS_FALTANTES = [
   'Fecha', 'Proveedor planilla', 'Proveedor SAP', 'Producto', 'Nº guía',
   'Patente', 'Nº ticket', 'Días sin cruzar', 'Guía SAP sin cruzar',
-  'TS que se dejan de contar', 'Acción', 'Estado'
+  'TS estimadas', 'Acción', 'Estado'
 ];
 
 /** La columna 'Estado' es la única que el script reescribe. */
@@ -158,9 +158,9 @@ function sincronizarGuiasFaltantes(libro, datos) {
       fila.ticket,
       diasSinCruzar(fila.fecha, corte),
       fila.guiaSospechosa || '',
-      redondear(fila.tsSinContar, 3),
+      redondear(fila.tsSinCruce, 3),
       '',
-      fila.contada ? 'Se está contando (regla)' : 'No se está contando (regla)'
+      textoEstado(fila, '')
     ]);
   });
 
@@ -186,10 +186,8 @@ function sincronizarGuiasFaltantes(libro, datos) {
         const fila = vistas[clave];
         let texto;
 
-        if (registro.accion === ACCION_GUIA.CONTAR) texto = 'Se cuenta (decidido a mano)';
-        else if (registro.accion === ACCION_GUIA.NO_CONTAR) texto = 'No se cuenta (decidido a mano)';
-        else if (!fila) texto = estadoDeGuiaResuelta(datos, registro);
-        else texto = fila.contada ? 'Se está contando (regla)' : 'No se está contando (regla)';
+        if (!fila) texto = estadoDeGuiaResuelta(datos, registro);
+        else texto = textoEstado(fila, registro.accion);
 
         estados[registro.filaHoja - 2] = [texto];
       });
@@ -205,6 +203,14 @@ function sincronizarGuiasFaltantes(libro, datos) {
     total: tabla.filas.length + nuevas.length,
     sinCruzar: Object.keys(vistas).length
   };
+}
+
+/** Qué está pasando con una guía que falta, para la columna 'Estado'. */
+function textoEstado(fila, accion) {
+  if (accion === ACCION_GUIA.CONTAR) return 'Se complementa (decidido a mano)';
+  if (accion === ACCION_GUIA.NO_CONTAR) return 'No se cuenta (decidido a mano)';
+  if (fila.contada) return 'Se complementa con el promedio';
+  return 'No se cuenta: SAP ya pasó de largo';
 }
 
 /**

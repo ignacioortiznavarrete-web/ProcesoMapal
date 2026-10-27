@@ -202,13 +202,8 @@ imprimir('homologacion', 5);
 guardarHomologacion([{ planilla: 'CSC', sap: '', plan: 'CSC LTDA.' }]);
 
 // --- Control ---------------------------------------------------------------
-// El export de SAP de este escenario llega sólo hasta el 07-10 y hay camiones
-// hasta el 17: con el vencimiento puesto, medio mes quedaría fuera y las
-// verificaciones del cruce no se verían. Así que este bloque prueba el cruce
-// puro (sin vencimiento) y el vencimiento tiene su propio bloque más abajo.
-assert(leerConfig('DIAS_GRACIA_SIN_CRUCE') === 0,
-  'de fábrica sólo se complementan los camiones que SAP todavía no alcanzó');
-ajustarConfig('DIAS_GRACIA_SIN_CRUCE', null);
+assert(leerConfig('DIAS_GRACIA_SIN_CRUCE') === null,
+  'de fábrica se complementan TODAS las guías que falten, sin importar la fecha');
 
 const resumen = actualizarControl('oct-2026');
 console.log('\nResumen: ' + JSON.stringify(resumen));
@@ -462,6 +457,22 @@ hojaOctubre.nombre = 'OCTUBRE 2026';
 console.log('\n--- guías que SAP nunca trajo ---');
 
 // El bloque anterior dejó importado septiembre: se vuelve a traer octubre.
+importarPlanillaOrigen();
+actualizarControl('oct-2026');
+
+// De fábrica NO se deja de contar nada: una guía que falta se complementa con
+// el promedio de las que sí están en SAP, y la hoja es sólo para revisar. Un
+// proveedor sin ninguna carga en el export se iría a cero completo si no.
+const detalleAbierto = libro.getSheetByName('Detalle Camiones').datos;
+assert(detalleAbierto.slice(1).every(f =>
+  String(f[10]).indexOf('NO CONTADA') < 0),
+  'con la configuración de fábrica ningún camión queda fuera del cálculo');
+const vencidoAbierto = detalleAbierto.find(f => String(f[6]) === '53999') || [];
+assert(vencidoAbierto[11] === 13,
+  'la guía del 02-10 que SAP no trajo se complementa igual con el promedio');
+assert(libro.getSheetByName('guias faltantes').datos.length > 1,
+  'y aun así queda listada en la hoja, para poder revisarla');
+
 ajustarConfig('DIAS_GRACIA_SIN_CRUCE', 0);
 importarPlanillaOrigen();
 actualizarControl('oct-2026');
@@ -474,7 +485,7 @@ const control2 = libro.getSheetByName('Control Ingreso').datos;
 
 assert(faltantes.length > 1, 'se abre la hoja con una fila por guía sin cruzar');
 assert(['Fecha','Proveedor planilla','Proveedor SAP','Producto','Nº guía','Patente',
-  'Nº ticket','Días sin cruzar','Guía SAP sin cruzar','TS que se dejan de contar',
+  'Nº ticket','Días sin cruzar','Guía SAP sin cruzar','TS estimadas',
   'Acción','Estado'].every((t, i) => encFalt[i] === t),
   'la hoja trae el detalle completo: fecha, proveedor, producto, guía, patente, ticket');
 
@@ -500,8 +511,8 @@ assert(filaFaltante[colFalt('Días sin cruzar')] === 5,
   'y cuántos días lleva sin cruzar (02-10 contra el corte del 07-10)');
 assert(String(filaFaltante[colFalt('Guía SAP sin cruzar')]) === '53793',
   'más la guía que SAP tiene suelta y podría ser este mismo camión');
-assert(filaFaltante[colFalt('TS que se dejan de contar')] === 13,
-  'y cuántas TS se están dejando fuera');
+assert(filaFaltante[colFalt('TS estimadas')] === 13,
+  'y cuántas TS está aportando esa guía');
 
 const encControl2 = control2[5];
 const filaGuivar2 = control2.slice(6).find(f =>

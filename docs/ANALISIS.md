@@ -56,12 +56,10 @@ contar dos veces el mismo camión.
    números de guía se repiten: entre proveedores, y dentro de un mismo
    proveedor entre materiales.
    - Guía encontrada → **EN SAP**, cantidad real de esa carga.
-   - Guía no encontrada y SAP todavía no llegó a esa fecha → **PENDIENTE**, se
-     complementa con la planilla y se valoriza con el promedio `TS/carga` del
-     material (1 camión × promedio).
-   - Guía no encontrada y SAP ya pasó de largo → **NO CONTADA**, suma 0 TS y
-     queda listada en `guias faltantes` para decidirla a mano. Ver "Guías que
-     SAP nunca trajo" más abajo.
+   - Guía no encontrada → **PENDIENTE**, se complementa con la planilla y se
+     valoriza con el promedio `TS/carga` del material (1 camión × promedio).
+     La fecha no interviene. Igual queda listada en `guias faltantes` para
+     poder revisarla; ver "Guías que no están en SAP" más abajo.
 3. **Una carga = un camión = una guía.** Antes de promediar, las líneas de SAP
    se agrupan por `proveedor + material + guía`: una misma guía puede venir en dos
    posiciones del pedido y, contada línea por línea, el promedio por carga
@@ -136,20 +134,18 @@ guía en la planilla hace que las dos se junten en la próxima pasada.
 El `SAP hasta` del control sigue mostrando la última fecha contabilizada de
 cada proveedor, pero ahora es sólo información: ya no decide nada.
 
-## Guías que SAP nunca trajo
+## Guías que no están en SAP
 
-Hay una asimetría entre un camión de hoy y uno de hace días:
+Un camión cuya guía no está en `Ingresos Sap` **se complementa con la
+planilla**: se valoriza con el promedio TS/carga de las cargas que sí están en
+SAP de ese proveedor y material. Eso es el corazón del control y pasa siempre,
+sin importar la fecha. SAP no se carga en orden: una guía que falta hoy puede
+aparecer la semana que viene, y dejar de contarla sería recortar el mes por un
+atraso del export.
 
-- El de **hoy** todavía no puede estar en SAP: la información pasa por cinco
-  fases. Ese se complementa con la planilla, y para eso existe este control.
-- El de **hace días** que sigue sin aparecer ya no es desfase. O la guía está
-  escrita distinta en cada sistema, o la carga se anuló, o nunca va a llegar.
-  Estimarlo mes a mes infla el avance con volumen que no existe, y nadie se da
-  cuenta porque se ve igual que los demás pendientes.
-
-Por eso esos camiones **no se cuentan** y se juntan en la hoja
-**`guias faltantes`**, con la misma mecánica que las homologaciones: el script
-propone y la persona decide.
+Igual queda listada en la hoja **`guias faltantes`**, con la misma mecánica que
+las homologaciones: el script propone y la persona decide. La hoja no cambia
+ningún número por sí sola; es para revisar.
 
 | Columna | Para qué |
 |---|---|
@@ -157,39 +153,40 @@ propone y la persona decide.
 | Nº guía, Patente, Nº ticket | con qué ir a buscar el papel |
 | Días sin cruzar | cuánto lleva esperando (vacío = SAP todavía no llega a su fecha) |
 | Guía SAP sin cruzar | la guía que SAP tiene suelta y podría ser este mismo camión |
-| TS que se dejan de contar | cuánto volumen queda fuera |
-| **Acción** | lo que se decide: vacío = la regla, `CONTAR`, `NO CONTAR` |
+| TS estimadas | cuánto está aportando esa guía al mes |
+| **Acción** | `NO CONTAR` la saca del cálculo; `CONTAR` la deja aunque la regla la venza; vacío = la regla |
 | Estado | qué está pasando con esa fila (lo escribe el script) |
 
-Lo que se escribe en `Acción` manda sobre la regla. Una guía que después se
-corrige y cruza no se borra de la hoja: queda con `Ya cruzó en SAP`, que es
-justo lo que se quiere ver al revisar.
+La columna `Guía SAP sin cruzar` viene del emparejamiento descrito en "La regla
+del cruce": cuando SAP tiene una carga suelta del mismo proveedor y material en
+fechas cercanas, lo más probable es que sea el mismo camión con la guía escrita
+distinta. En ese caso lo que corresponde no es sacar el camión, sino corregir
+la guía: en la próxima pasada las dos puntas se juntan y la fila queda con
+`Ya cruzó en SAP`.
 
-### El vencimiento se mide contra SAP, no contra hoy
+### El vencimiento, que viene apagado
 
-`CONFIG.DIAS_GRACIA_SIN_CRUCE` dice cuántos días de atraso se toleran:
+`CONFIG.DIAS_GRACIA_SIN_CRUCE` permite además dejar de contar las guías muy
+atrasadas:
 
-- `0` (de fábrica) → se complementan sólo los camiones que SAP todavía no
-  alcanzó.
-- `N` → además los de los N días anteriores al corte.
-- `null` → no vence nunca; se complementan todos.
+- `null` **(de fábrica)** → no vence nunca; se complementan todas.
+- `N` → dejan de contarse las anteriores a N días del corte del export.
+- `0` → se complementan sólo las que SAP todavía no alcanzó.
 
-La referencia es la **última `Fecha Contab.` del export de SAP**, no la fecha
-de hoy. Si se midiera contra hoy y el export quedara atrasado diez días, todo
-el mes se daría por vencido y el control se iría a cero justo cuando lo que
-falta es refrescar el export. Contra el corte de SAP, un export atrasado
-simplemente estima más días, que es lo correcto.
+Viene apagado por una razón concreta: un proveedor que no tiene **ninguna**
+carga en el export se iría a cero completo. En los datos reales de octubre,
+GUIVAR tenía 15 camiones de astilla verde en la planilla y ninguno en
+`Ingresos Sap`; con el vencimiento en `0` los 15 dejaban de contarse y su
+avance pasaba de 45% a 0%, sin que nada estuviera mal salvo el export.
 
-> Esto se parece al corte por proveedor que se quitó, y conviene ver en qué se
-> diferencia. Aquel era **por proveedor** —así que un proveedor con filas
-> sueltas en SAP quedaba arruinado—, botaba a cero **en silencio** y no se
-> podía discutir. Este es **global** (robusto frente a los huecos), tiene
-> gracia configurable, deja cada camión **listado con su detalle**, y la
-> decisión de la persona está por encima.
->
-> El riesgo que queda: un proveedor que SAP siempre carga tres semanas tarde
-> va a aparecer vencido. Para eso están los días de gracia y el `CONTAR` de la
-> hoja, que es permanente.
+Si se baja de `null`, la referencia es la **última `Fecha Contab.` del export
+de SAP**, no la fecha de hoy: si se midiera contra hoy y el export quedara
+atrasado diez días, todo el mes se daría por vencido justo cuando lo que falta
+es refrescar el export.
+
+> Para sacar casos puntuales no hace falta tocar este número: `NO CONTAR` en la
+> hoja saca ese camión y nada más. Es la vía recomendada, porque deja escrito
+> cuál se sacó y queda a la vista.
 
 ## Productos
 
