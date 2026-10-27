@@ -225,8 +225,8 @@ function valor(proveedor, columna, producto) {
   return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 22,
-  'entran astilla, viruta y la variante homologada; se descarta sólo ANULADO');
+assert(resumen.camionesPlanilla === 21,
+  'entran astilla, aserrín y viruta; se descartan la fila ANULADO y el combustible');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 3,
   'GUIVAR: 2 camiones cruzan por guía y un tercero está en SAP con otra guía');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1,
@@ -388,11 +388,13 @@ assert(factores['ASTILLA VERDE (TS)'] === 13 &&
   factores['VIRUTA-ASERUTA (TS)'] === 7.8,
   'GUIVAR tiene un factor propio por cada material, no uno solo');
 
-// COMBUSTIBLE está declarado en la tabla pero SAP no tiene ese material:
-// se cuenta, queda en cero y NO se reporta como producto sin homologar.
-const combustible = detalle.find(f => String(f[6]) === '24742') || [];
-assert(combustible.length > 0 && combustible[11] === 0,
-  'el combustible entra al control aunque SAP no lo tenga, en cero');
+// COMBUSTIBLE quedó fuera de PRODUCTOS_INCLUIDOS: no existe como material en
+// SAP ni como línea del Plan, así que sólo aportaba camiones en cero.
+const combustible = detalle.find(f => String(f[6]) === '24742');
+assert(!combustible, 'el combustible no entra al control');
+assert(libro.getSheetByName('Planilla Exportada').datos.slice(1)
+  .some(f => String(f[2]) === 'COMBUSTIBLE'),
+  'pero sigue importándose a la planilla: el filtro es del control, no de la importación');
 
 const soloSapAserrin = detalle.find(f => String(f[6]) === '31505') || [];
 assert(String(soloSapAserrin[10]) === 'SOLO SAP' &&
@@ -439,8 +441,8 @@ const panelGuivar = panel.filas.filter(f =>
   f.proveedor === 'COMERCIAL GUIVAR LTDA.' && f.mes === '2026-10');
 assert(panelGuivar.some(f => f.precio === 93),
   'cada fila trae el precio que le fija el Plan');
-assert(panel.fuente.sinHomologar.length === 3 &&
-  ['ENESA', 'MASISA', 'RIO CRUCES'].every(nombre =>
+assert(panel.fuente.sinHomologar.length === 2 &&
+  ['ENESA', 'MASISA'].every(nombre =>
     panel.fuente.sinHomologar.some(x => x.proveedor === nombre)),
   'el panel avisa de los nombres sin par, en cualquier producto');
 assert(panel.fuente.corteGlobal === '2026-10-07',
@@ -450,7 +452,7 @@ assert(panel.promedios.some(x => x.proveedor === 'COMERCIAL GUIVAR LTDA.' &&
 assert(panel.plan.filas.length === 12, 'el panel entrega el Plan completo');
 assert(panel.fuente.productosSinHomologar.length === 1 &&
   panel.fuente.productosSinHomologar[0].producto === 'ASERRIN HUMEDO',
-  'el panel avisa sólo del producto que no se pudo traducir, no del combustible declarado');
+  'el panel avisa sólo del producto que pasó el filtro y no se pudo traducir');
 
 // --- Mes sin hoja en la planilla origen ------------------------------------
 console.log('\n--- la hoja del mes todavía no existe ---');

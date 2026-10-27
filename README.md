@@ -51,7 +51,7 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
   promedio TS/carga no se encuentra.
 - Agrupa por proveedor del `Plan` usando la hoja `homologacion` y arma
   `Control Ingreso` (avance %, desvío, monto) y `Detalle Camiones`.
-- Controla astilla verde, aserrín, combustible y viruta (`PRODUCTOS_INCLUIDOS`),
+- Controla astilla verde, aserrín y viruta (`PRODUCTOS_INCLUIDOS`),
   cada producto en su propia fila: un proveedor que entrega dos productos se
   compara contra el plan de cada uno, no contra la suma. Una carga nunca se
   valoriza con el promedio de otro material: si no hay histórico SAP de ese

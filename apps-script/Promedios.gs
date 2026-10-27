@@ -254,7 +254,7 @@ function buscarPorMaterial(mapa, prefijo, claveProd) {
  *
  * El material manda. Antes se caía al promedio del proveedor en cualquier
  * material y, si no, al general: con un solo material eso daba lo mismo, pero
- * al entrar viruta, aserrín y combustible pasaría a valorizar un camión de
+ * al entrar viruta y aserrín pasaría a valorizar un camión de
  * viruta con el promedio de la astilla, que pesa bastante más. El error no se
  * vería en ninguna parte.
  *

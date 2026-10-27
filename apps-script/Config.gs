@@ -24,9 +24,11 @@ const CONFIG = {
   // Lista vacía = todos. Un nombre terminado en '*' funciona como prefijo,
   // así 'ASERRIN*' toma también 'ASERRIN viruta'.
   //
-  // Quedan fuera a propósito 'ASTILLA SECA' y 'ASTILLA VERDE C/CORTEZA':
-  // agrégalos acá cuando haya que controlarlos.
-  PRODUCTOS_INCLUIDOS: ['ASTILLA VERDE', 'ASERRIN*', 'COMBUSTIBLE', 'VIRUTA'],
+  // Quedan fuera a propósito 'COMBUSTIBLE' (no existe como material en SAP ni
+  // como línea del Plan, así que sólo aportaba camiones en cero), 'ASTILLA
+  // SECA' y 'ASTILLA VERDE C/CORTEZA'. Agrégalos acá cuando haya que
+  // controlarlos; sus camiones aparecen contados en 'Filas descartadas'.
+  PRODUCTOS_INCLUIDOS: ['ASTILLA VERDE', 'ASERRIN*', 'VIRUTA'],
   // Filas con estos valores en la columna ESTADO se descartan.
   ESTADOS_EXCLUIDOS: ['ANULADO', 'ANULADA', 'NULO', 'NULA', 'RECHAZADO', 'RECHAZADA'],
 
@@ -124,11 +126,6 @@ const CONFIG = {
     { planilla: 'ASTILLA VERDE', sap: 'ASTILLA VERDE (TS)', plan: 'ASTILLA VERDE' },
     { planilla: 'ASERRIN', sap: 'ASERRIN (TS)', plan: 'ASERRIN' },
     { planilla: 'VIRUTA', sap: 'VIRUTA-ASERUTA (TS)', plan: 'VIRUTA' },
-
-    // COMBUSTIBLE llega en la planilla manual pero no existe como material en
-    // SAP ni como línea del Plan. Queda declarado igual: así sus camiones se
-    // cuentan y se ven en 0 TS en vez de desaparecer por el filtro.
-    { planilla: 'COMBUSTIBLE', sap: '', plan: '' },
 
     // Materiales que SAP sí separa y la planilla no: ahí todo se escribe
     // 'ASTILLA VERDE'. Se dejan en su propia fila a propósito, porque su

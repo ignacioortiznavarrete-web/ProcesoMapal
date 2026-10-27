@@ -38,7 +38,7 @@ contar dos veces el mismo camión.
 - **`PESO BRUTO` en dos unidades**: toneladas en las hojas viejas (`33.190`) y
   kilos en las nuevas (`43660`). Se normaliza a toneladas (corte en 1.000).
 - **Varios productos**: `ASTILLA VERDE`, `ASTILLA SECA`, `VIRUTA`,
-  `COMBUSTIBLE`, `ASERRIN viruta`, `ASTILLA VERDE C/CORTEZA`. Se controla sólo
+  `COMBUSTIBLE`, `ASERRIN viruta`, `ASTILLA VERDE C/CORTEZA`. Se controlan sólo
   lo que esté en `CONFIG.PRODUCTOS_INCLUIDOS` (por defecto `ASTILLA VERDE`,
   que es lo que hay en SAP y en el Plan).
 - **Nombres de proveedor cortos**: `GUIVAR`, `COLLICURA`, `LEON`, `LEONERA`,
@@ -203,7 +203,7 @@ es refrescar el export.
 
 ## Productos
 
-Se controlan `ASTILLA VERDE`, `ASERRIN*`, `COMBUSTIBLE` y `VIRUTA`
+Se controlan `ASTILLA VERDE`, `ASERRIN*` y `VIRUTA`
 (`CONFIG.PRODUCTOS_INCLUIDOS`; el `*` final vale como prefijo, así `ASERRIN*`
 toma también `ASERRIN SECO`). Cada producto lleva su propia fila de control:
 si un proveedor entrega astilla y viruta, cada una se compara contra su plan,
@@ -223,7 +223,6 @@ líneas), con su factor real por carga:
 | 3000042 | `VIRUTA-ASERUTA (TS)` | `VIRUTA` | `VIRUTA` | 5 | 8,93 |
 | 3009002 | `ASTILLA VERDE CON CORTEZA (TS)` | — | — | 29 | 9,42 |
 | 3009003 | `ASTILLA VERDE OTRA ESPECIE MAD` | — | — | 40 | 15,83 |
-| — | — | `COMBUSTIBLE` | — | — | — |
 
 Tres cosas que se ven en esa tabla y conviene tener presentes:
 
@@ -233,8 +232,11 @@ Tres cosas que se ven en esa tabla y conviene tener presentes:
   mezclan** con la astilla verde: 9,42 y 15,83 contra 11,32. Quedan en su
   propia fila hasta que el negocio decida lo contrario; para juntarlas basta
   escribir `ASTILLA VERDE` en su columna `Producto Plan`.
-- **`COMBUSTIBLE` no existe como material en SAP ni como línea del Plan.** Sus
-  camiones se cuentan y se muestran en 0 TS, no desaparecen.
+- **`COMBUSTIBLE` quedó fuera del control.** No existe como material en SAP ni
+  como línea del Plan, así que sólo aportaba camiones en 0 TS con su alerta.
+  Se sigue importando a `Planilla Exportada` —el filtro es del control, no de
+  la importación— y sus camiones aparecen contados en `Filas descartadas`.
+  Para volver a controlarlo basta agregarlo a `PRODUCTOS_INCLUIDOS`.
 
 Con el nombre crudo eso rompe dos cosas, las dos sin avisar: el control abre
 una fila por cada forma de escribirlo (la misma viruta partida en tres, ninguna
