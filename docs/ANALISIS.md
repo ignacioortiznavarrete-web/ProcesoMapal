@@ -112,24 +112,38 @@ huecos hacia atrás, así que "SAP cubre hasta el 22" no significa que tenga
 todo lo anterior. La regla terminaba botando a cero camiones que de verdad
 faltaban, y el mes quedaba corto justo en los proveedores más atrasados.
 
-Lo que esa regla intentaba evitar —contar dos veces un camión cuya guía está
-escrita distinta en cada sistema— ahora es un **aviso**, no un recorte:
+### Complementar sin duplicar
 
-- Las cargas de SAP que ningún camión reclamó se emparejan con los camiones
-  que no cruzaron, dentro del mismo proveedor y material, por cercanía de
-  fecha y hasta `CONFIG.DIAS_SOSPECHA_GUIA` días de distancia.
-- Cada carga suelta marca **un** camión, el más probable, y el detalle nombra
-  la guía que SAP tiene sin cruzar: *"SAP tiene sin cruzar la guía 53793 del
-  2026-10-03, mismo proveedor y material: puede ser este camión"*.
-- Nunca se marcan más camiones que cargas sueltas hay. Avisar a todos los
-  pendientes del proveedor por una sola carga suelta dejaría el mes entero
-  marcado, y una marca que está en todas partes no se mira.
-- La cantidad no cambia: el camión se estima igual. Lo que se marca es la
-  sospecha, no una corrección.
+Queda un riesgo que el corte por fecha intentaba cubrir, y que hay que resolver
+de verdad: un camión cuya guía está escrita distinta en cada sistema aparece
+**dos veces**. Una como camión de la planilla que no cruzó, y otra como carga
+de SAP que nadie reclamó. Si se estima el primero y se cuenta la segunda, el
+mismo camión se cuenta dos veces.
 
-Las dos puntas quedan visibles: el camión como `PENDIENTE (estimado)` con su
-marca, y la carga de SAP como `SOLO SAP` con su número de guía. Corregir la
-guía en la planilla hace que las dos se junten en la próxima pasada.
+Por eso las cargas de SAP que ningún camión reclamó se **emparejan** con los
+camiones que no cruzaron, dentro del mismo proveedor y material, por cercanía
+de fecha y hasta `CONFIG.DIAS_SOSPECHA_GUIA` días de distancia. Cuando una
+calza:
+
+- El camión **no se estima**: toma la **cantidad real** de esa carga. Queda como
+  `EN SAP CON OTRA GUÍA (no se estima)`, y el detalle dice cuál:
+  *"SAP (real) con la guía 53793 del 2026-10-03: no se estima, porque contar su
+  carga y además estimarlo sería el mismo camión dos veces. Corregir el Nº de
+  guía en la planilla"*.
+- La carga queda **consumida**: ya no aparece como `SOLO SAP`.
+- El mes del camión sigue saliendo de la planilla (`FECHA_BASE`), que es la
+  fecha de ingreso físico. Así no se mueve volumen de un mes a otro.
+
+Resultado: **una fila por camión físico, con la cantidad real, contada una vez.**
+En los datos de prueba, GUIVAR pasaba de 65 TS proyectadas (39 reales + 26
+estimadas, con 13 duplicadas) a las 52 correctas.
+
+Cada carga suelta resuelve **un** camión, el más cercano en fecha: nunca se
+tocan más camiones que cargas sueltas hay. Los demás se estiman normalmente.
+
+Si el emparejamiento se equivoca y de verdad son dos camiones distintos,
+`CONTAR` en la hoja `guias faltantes` deshace el emparejamiento: el camión se
+estima y la carga vuelve a contarse aparte.
 
 El `SAP hasta` del control sigue mostrando la última fecha contabilizada de
 cada proveedor, pero ahora es sólo información: ya no decide nada.
@@ -154,15 +168,14 @@ ningún número por sí sola; es para revisar.
 | Días sin cruzar | cuánto lleva esperando (vacío = SAP todavía no llega a su fecha) |
 | Guía SAP sin cruzar | la guía que SAP tiene suelta y podría ser este mismo camión |
 | TS estimadas | cuánto está aportando esa guía al mes |
-| **Acción** | `NO CONTAR` la saca del cálculo; `CONTAR` la deja aunque la regla la venza; vacío = la regla |
+| **Acción** | `NO CONTAR` la saca del cálculo; `CONTAR` la estima aunque la regla la venza y deshace el emparejamiento; vacío = la regla |
 | Estado | qué está pasando con esa fila (lo escribe el script) |
 
-La columna `Guía SAP sin cruzar` viene del emparejamiento descrito en "La regla
-del cruce": cuando SAP tiene una carga suelta del mismo proveedor y material en
-fechas cercanas, lo más probable es que sea el mismo camión con la guía escrita
-distinta. En ese caso lo que corresponde no es sacar el camión, sino corregir
-la guía: en la próxima pasada las dos puntas se juntan y la fila queda con
-`Ya cruzó en SAP`.
+La columna `Guía SAP sin cruzar` viene del emparejamiento descrito en
+"Complementar sin duplicar". Cuando está llena, ese camión **no se estimó**:
+tomó la cantidad real de esa carga, y la carga ya no se cuenta aparte. Lo que
+corresponde ahí es corregir el Nº de guía en la planilla; en la próxima pasada
+las dos puntas cruzan solas y la fila queda con `Ya cruzó en SAP`.
 
 ### El vencimiento, que viene apagado
 

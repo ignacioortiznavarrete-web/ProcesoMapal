@@ -35,9 +35,11 @@ septiembre cuenta como día hábil y el plan a la fecha queda inflado.
   pedido vino en varias posiciones, las líneas se suman antes de promediar.
 - El peso bruto nunca se suma: las TS salen de SAP (real) o del promedio
   TS/carga del material (estimado).
-- Cuando una carga de SAP queda sin cruzar y hay un camión sin cruzar del mismo
-  proveedor y material en fechas cercanas, los empareja y marca **uno** para
-  revisar el Nº de guía. Avisa; no recorta el mes.
+- **Complementa sin duplicar**: cuando una carga de SAP queda sin cruzar y hay
+  un camión sin cruzar del mismo proveedor y material en fechas cercanas, los
+  empareja. El camión toma la cantidad **real** de esa carga en vez de
+  estimarse, y la carga deja de contarse aparte: un camión físico, una fila,
+  contada una vez. Queda marcado para corregir el Nº de guía.
 - Las guías que no están en SAP **se complementan igual** con el promedio de
   las que sí están, y quedan listadas una por una en la hoja `guias faltantes`
   con su fecha, proveedor, producto, patente, ticket, días de atraso y las TS

@@ -209,6 +209,9 @@ function sincronizarGuiasFaltantes(libro, datos) {
 function textoEstado(fila, accion) {
   if (accion === ACCION_GUIA.CONTAR) return 'Se complementa (decidido a mano)';
   if (accion === ACCION_GUIA.NO_CONTAR) return 'No se cuenta (decidido a mano)';
+  if (fila.estado === ESTADO.EN_SAP_OTRA_GUIA) {
+    return 'No se estima: ya está en SAP con otra guía';
+  }
   if (fila.contada) return 'Se complementa con el promedio';
   return 'No se cuenta: SAP ya pasó de largo';
 }

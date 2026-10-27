@@ -60,6 +60,12 @@ function agregarPorProveedor(datos, periodo) {
     if (fila.estado === ESTADO.EN_SAP) {
       agregado.camionesEnSap++;
       agregado.tsSap += fila.ts;
+    } else if (fila.estado === ESTADO.EN_SAP_OTRA_GUIA) {
+      // Está en SAP con otra guía: cuenta como real, no como estimado, y queda
+      // marcado para que alguien corrija el número de guía.
+      agregado.camionesEnSap++;
+      agregado.tsSap += fila.ts;
+      agregado.camionesRevisarGuia++;
     } else if (fila.estado === ESTADO.SIN_HOMOLOGAR) {
       agregado.camionesSinHomologar++;
     } else if (fila.estado === ESTADO.NO_CONTADA) {
@@ -72,7 +78,7 @@ function agregarPorProveedor(datos, periodo) {
       if (fila.estado === ESTADO.SIN_PROMEDIO) agregado.camionesSinPromedio++;
       // Estimado igual, pero con cargas de SAP sueltas del mismo proveedor y
       // material: puede ser el mismo camión con la guía escrita distinta.
-      if (fila.revisarGuia) agregado.camionesRevisarGuia++;
+
     }
   });
 
@@ -285,8 +291,8 @@ function escribirHojaControl(libro, agregados, periodo, datos) {
         CONFIG.HOJA_GUIAS_FALTANTES + '"');
     }
     if (dato.camionesRevisarGuia) {
-      alertas.push(dato.camionesRevisarGuia + ' camión(es) estimado(s) que ' +
-        'calzan con una carga de SAP sin cruzar: revisar el Nº de guía');
+      alertas.push(dato.camionesRevisarGuia + ' camión(es) están en SAP con otra ' +
+        'guía: se cuentan una sola vez, corregir el Nº de guía');
     }
     if (promedioFueraDeRango(factor)) {
       alertas.push('TS/carga fuera de rango (' + redondear(factor, 3) + ')');

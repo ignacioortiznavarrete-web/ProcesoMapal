@@ -54,7 +54,7 @@ function resolverIngresos(libro) {
   // fecha. Cada carga suelta marca a UN camión, el más probable: avisar a
   // todos los pendientes del proveedor por una sola carga suelta dejaría el
   // mes entero marcado, y una marca que está en todas partes no se mira.
-  emparejarSospechas(promedios, pendientesDeCruce);
+  emparejarSospechas(promedios, pendientesDeCruce, faltantes);
 
   const filas = [];
   const guiasVistas = {};
@@ -64,7 +64,12 @@ function resolverIngresos(libro) {
     const fila = item.fila;
     const equivalencia = item.equivalencia;
     const material = item.material;
-    const cargaSap = item.cargaSap;
+    // El camión está en SAP con otra guía: su carga es la que le emparejó
+    // emparejarSospechas(). Se usa esa cantidad real en vez de estimar, porque
+    // estimarlo además de contar su carga sería contar el mismo camión dos
+    // veces: una como estimado y otra como 'sólo SAP'.
+    const otraGuia = !item.cargaSap && !!(item.sospecha && item.sospecha.carga);
+    const cargaSap = item.cargaSap || (otraGuia ? item.sospecha.carga : null);
 
     const mesPlanilla = claveMes(fila.fecha);
     const mesSap = cargaSap ? claveMes(cargaSap.fecha) : '';
@@ -85,12 +90,24 @@ function resolverIngresos(libro) {
     let tsSinCruce = 0;
 
     if (cargaSap) {
-      estado = ESTADO.EN_SAP;
       fuente = 'SAP';
       cantidad = cargaSap.cantidad;
       detalleFuente = cargaSap.lineas > 1
         ? 'SAP (real, ' + cargaSap.lineas + ' líneas)'
         : 'SAP (real)';
+
+      if (otraGuia) {
+        estado = ESTADO.EN_SAP_OTRA_GUIA;
+        sinCruzar = true;
+        revisarGuia = true;
+        tsSinCruce = cargaSap.cantidad;
+        detalleFuente += ' con la guía ' + (cargaSap.guiaTexto || cargaSap.guia) +
+          ' del ' + claveFecha(cargaSap.fecha) + ': no se estima, porque contar ' +
+          'su carga y además estimarlo sería el mismo camión dos veces. ' +
+          'Corregir el Nº de guía en la planilla';
+      } else {
+        estado = ESTADO.EN_SAP;
+      }
     } else if (!equivalencia.sap && !equivalencia.plan) {
       estado = ESTADO.SIN_HOMOLOGAR;
       fuente = 'SIN DATO';
@@ -121,13 +138,6 @@ function resolverIngresos(libro) {
         if (referencia.promedio <= 0) estado = ESTADO.SIN_PROMEDIO;
         else if (!equivalencia.sap) estado = ESTADO.SIN_SAP;
         else estado = ESTADO.PENDIENTE;
-      }
-
-      if (item.sospecha) {
-        revisarGuia = true;
-        detalleFuente += ' - SAP tiene sin cruzar la guía ' + item.sospecha.guia +
-          ' del ' + claveFecha(item.sospecha.fecha) +
-          ', mismo proveedor y material: puede ser este camión';
       }
     }
 
@@ -257,12 +267,9 @@ function resolverIngresos(libro) {
  * cuenta; uno que SAP ya pasó de largo hace días, no.
  */
 function decidirSiSeCuenta(faltantes, equivalencia, material, fila, corteSap) {
-  const clave = claveCarga(
-    equivalencia.sap || fila.proveedor,
-    material.sap || material.canonico,
-    fila.guia
-  );
-  const registro = faltantes.porCarga[clave];
+  const registro = faltantes.porCarga[claveFaltante(
+    equivalencia.sap || fila.proveedor, material.canonico, fila.guia
+  )];
 
   if (registro && registro.accion === ACCION_GUIA.CONTAR) {
     return { contar: true, motivo: 'se cuenta por decisión en "' +
@@ -335,7 +342,7 @@ function buscarCargaSap(promedios, proveedorSap, materialSap, guia) {
  * No cambia ninguna cantidad: el camión se estima igual. Lo que se marca es
  * la sospecha, no una corrección.
  */
-function emparejarSospechas(promedios, pendientesDeCruce) {
+function emparejarSospechas(promedios, pendientesDeCruce, faltantes) {
   const grupos = {};
 
   function grupo(clave) {
@@ -350,6 +357,9 @@ function emparejarSospechas(promedios, pendientesDeCruce) {
 
   pendientesDeCruce.forEach(function (item) {
     if (item.cargaSap || !item.equivalencia.sap || !item.fila.fecha) return;
+    // Una decisión escrita a mano manda: si alguien dijo que este camión se
+    // cuenta (o que no), no se le empareja ninguna carga encima.
+    if (accionDeGuia(faltantes, item.equivalencia, item.material, item.fila)) return;
     grupo(claveGrupoSospecha(item.equivalencia.sap, item.material.sap)).camiones.push(item);
   });
 
@@ -375,10 +385,29 @@ function emparejarSospechas(promedios, pendientesDeCruce) {
       });
 
       if (elegido) {
-        elegido.sospecha = { guia: carga.guiaTexto || carga.guia, fecha: carga.fecha };
+        elegido.sospecha = { guia: carga.guiaTexto || carga.guia, fecha: carga.fecha,
+          carga: carga };
+        // La carga queda consumida: ya no sale como 'sólo SAP', porque su
+        // volumen pasó a contarse en el camión de la planilla.
+        carga.usado = true;
       }
     });
   });
+}
+
+/**
+ * La acción escrita a mano para un camión, o '' si no hay ninguna.
+ *
+ * Usa claveFaltante(), la misma llave con que la hoja se indexa: con el nombre
+ * de producto homologado y no el de SAP. Buscar con el de SAP haría que la
+ * decisión no se encontrara nunca para los materiales que se llaman distinto
+ * en cada lado, que son justo los que hay.
+ */
+function accionDeGuia(faltantes, equivalencia, material, fila) {
+  const registro = faltantes.porCarga[claveFaltante(
+    equivalencia.sap || fila.proveedor, material.canonico, fila.guia
+  )];
+  return registro ? registro.accion : '';
 }
 
 function claveGrupoSospecha(proveedorSap, materialSap) {

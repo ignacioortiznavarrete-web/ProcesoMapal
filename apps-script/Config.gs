@@ -217,6 +217,7 @@ const ESTADO = {
   PRODUCTO_SIN_HOMOLOGAR: 'PRODUCTO SIN HOMOLOGAR',
   SIN_SAP: 'PENDIENTE (proveedor sin historial SAP)',
   SOLO_SAP: 'SOLO SAP',
+  EN_SAP_OTRA_GUIA: 'EN SAP CON OTRA GUÍA (no se estima)',
   NO_CONTADA: 'NO CONTADA (guía que SAP nunca trajo)',
   DUPLICADO: 'GUIA DUPLICADA'
 };

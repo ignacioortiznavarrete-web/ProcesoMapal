@@ -84,7 +84,8 @@ const octubre2026 = [
   [18,'06-10-2026','ASTILLA VERDE','COLLICURA','SANTA JUANA','70001','FCPJ65',44100,'467973','OK','misma guía que su aserrín','','','',''],
   [19,'06-10-2026','ASERRIN','COLLICURA','SANTA JUANA','70001','FCPJ65',29500,'467974','OK','misma guía que su astilla','','','',''],
   [20,'15-10-2026','ASERRIN','VOLCAN','QUIRIHUE','44001','HFVD15',28700,'467975','OK','aserrín sin histórico propio','','','',''],
-  [21,'','','','','','','','','','','','','','']
+  [21,'02-10-2026','ASTILLA VERDE','CSC','TREHUACO','1400','GXVW37',40100,'467976','OK','temprano y sin carga de SAP que le calce','','','',''],
+  [22,'','','','','','','','','','','','','','']
 ];
 const sept2024 = [  // layout viejo: FECHA en A con encabezado basura, sin N°
   ['fdd','PRODUCTO','PROVEEDOR','ORIGEN','N° DE GUÍA','PATENTE','PESO BRUTO','N° TICKET','ESTADO','N°'],
@@ -180,7 +181,7 @@ assert(soloMes.hojas.length === 1, 'una sola hoja importada');
 assert(soloMes.hojas[0].hoja === 'OCTUBRE 2026', 'es la hoja del mes en curso');
 assert(soloMes.mes === mesActual(), 'el mes importado es el actual');
 assert(soloMes.aviso === '', 'sin avisos: la hoja del mes existe');
-assert(soloMes.filas === 20, '20 camiones (sin la fila de relleno)');
+assert(soloMes.filas === 21, '21 camiones (sin la fila de relleno)');
 const primeraFila = libro.getSheetByName('Planilla Exportada').datos[1];
 assert(primeraFila[1] instanceof Date && primeraFila[1].getDate() === 1,
   'queda en orden cronológico, igual que la planilla origen');
@@ -191,7 +192,7 @@ ajustarConfig('MESES_A_IMPORTAR', 2);
 const importado = importarPlanillaOrigen();
 console.log(JSON.stringify(importado));
 assert(importado.hojas.length === 2, 'se suman septiembre y octubre 2026');
-assert(importado.filas === 22, '22 camiones importados (sin filas de relleno)');
+assert(importado.filas === 23, '23 camiones importados (sin filas de relleno)');
 
 // --- Homologación automática ----------------------------------------------
 console.log('\n--- homologación ---');
@@ -224,23 +225,28 @@ function valor(proveedor, columna, producto) {
   return filaControl(proveedor, producto || 'ASTILLA VERDE')[encabezado.indexOf(columna)];
 }
 
-assert(resumen.camionesPlanilla === 21,
+assert(resumen.camionesPlanilla === 22,
   'entran astilla, viruta y la variante homologada; se descarta sólo ANULADO');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 2, 'GUIVAR: 2 camiones ya en SAP');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 2, 'GUIVAR: 2 camiones pendientes');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 65,
-  'GUIVAR: 39 TS reales + 26 estimadas. La guía que no cruza se complementa con ' +
-  'la planilla; ya no se bota a cero por la fecha, porque SAP no carga en orden');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones en SAP') === 3,
+  'GUIVAR: 2 camiones cruzan por guía y un tercero está en SAP con otra guía');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones pendientes') === 1,
+  'sólo queda pendiente el que SAP de verdad no tiene');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'TS proyectada') === 52,
+  'GUIVAR: 39 reales + 13 estimadas. El camión de la guía 53999 toma los 13 TS ' +
+  'reales de la carga 53793 en vez de estimarse: antes se contaban los dos, el ' +
+  'estimado y la carga suelta, y el mes salía 65 con 13 TS duplicadas');
+assert(valor('COMERCIAL GUIVAR LTDA.', 'Cargas sólo SAP') === 0,
+  'y esa carga ya no aparece aparte como sólo SAP: se contó en su camión');
 assert(valor('COMERCIAL GUIVAR LTDA.', 'Camiones a revisar') === 1,
-  'queda marcado UN camión, el que calza con la carga de SAP sin cruzar');
-assert(String(valor('COMERCIAL GUIVAR LTDA.', 'Alertas')).indexOf('revisar el Nº de guía') >= 0,
-  'el control avisa de la guía a revisar sin recortar el mes');
+  'queda marcado el camión cuya guía hay que corregir');
+assert(String(valor('COMERCIAL GUIVAR LTDA.', 'Alertas')).indexOf('otra guía') >= 0,
+  'el control avisa de la guía a corregir sin duplicar ni recortar');
 const corteGuivar = valor('COMERCIAL GUIVAR LTDA.', 'SAP hasta');
 assert(corteGuivar instanceof Date && corteGuivar.getDate() === 3,
   'el control muestra hasta qué día SAP cubre a cada proveedor (GUIVAR: 03-10)');
 assert(valor('SERVICIOS DE TRANSPORTE VOLCÁN SPA', 'Camiones pendientes') === 1,
   'la guía 53791 de VOLCAN no se cruza con la 53791 de GUIVAR');
-assert(valor('CSC LTDA.', 'Camiones pendientes') === 1,
+assert(valor('CSC LTDA.', 'Camiones pendientes') === 2,
   'CSC homologado sólo contra el Plan igual se estima');
 assert(String(valor('ENESA (sin homologar)', 'Alertas')).indexOf('sin homologar') >= 0,
   'ENESA queda marcado como sin homologar');
@@ -252,7 +258,7 @@ const guivarPromedio = promediosHoja.find(f => String(f[0]) === 'COMERCIAL GUIVA
   String(f[1]) === 'ASTILLA VERDE (TS)') || [];
 assert(guivarPromedio[5] === 3, 'las 4 líneas de SAP de GUIVAR son 3 cargas');
 assert(guivarPromedio[7] === 13, 'TS/carga de GUIVAR = 39/3 = 13 (no 39/4)');
-assert(valor('COMERCIAL GUIVAR LTDA.', 'Cargas sólo SAP') === 1,
+assert(guivarPromedio[3] === 3,
   'la carga partida se consume completa, no deja media carga suelta');
 
 const detalle = libro.getSheetByName('Detalle Camiones').datos;
@@ -261,13 +267,17 @@ assert(guia53792[10] === 'EN SAP', 'la guía 053792 cruza con la 53792 de SAP');
 const guia53791 = detalle.find(f => String(f[6]) === '53791' && f[3] === 'GUIVAR') || [];
 assert(guia53791[11] === 12.777, 'el camión de la guía partida recibe las dos posiciones sumadas');
 assert(String(guia53791[12]).indexOf('2 líneas') > 0, 'el detalle avisa que la carga venía en 2 líneas');
-// La guía manda, no la fecha: SAP no se carga en orden, así que un camión en
-// un día "ya cubierto" igual puede faltar de verdad.
-const noCruza = detalle.find(f => String(f[6]) === '53999') || [];
-assert(noCruza[10] === 'PENDIENTE (estimado)' && noCruza[11] === 13,
-  'la guía que no está en SAP se complementa con la planilla, no se bota a cero');
-assert(String(noCruza[12]).indexOf('sin cruzar la guía 53793') >= 0,
-  'y el detalle nombra la carga de SAP que podría ser ese mismo camión');
+// Complementar sin duplicar: si SAP tiene una carga suelta que calza, el
+// camión toma ESA cantidad real en vez de estimarse. Contar las dos cosas
+// —el estimado y la carga suelta— sería el mismo camión dos veces.
+const otraGuia = detalle.find(f => String(f[6]) === '53999') || [];
+assert(otraGuia[10] === 'EN SAP CON OTRA GUÍA (no se estima)' && otraGuia[11] === 13,
+  'el camión toma la cantidad real de la carga que le calza, no una estimación');
+assert(String(otraGuia[12]).indexOf('con la guía 53793') >= 0 &&
+  String(otraGuia[12]).indexOf('dos veces') >= 0,
+  'y el detalle nombra esa guía y dice por qué no se estima');
+assert(!detalle.slice(1).some(f => String(f[6]) === '53793'),
+  'la carga 53793 ya no sale como fila aparte: se contó en su camión');
 
 const pendiente = detalle.find(f => String(f[6]) === '53850') || [];
 assert(pendiente[10] === 'PENDIENTE (estimado)' && pendiente[11] === 13,
@@ -316,17 +326,19 @@ assert(virutaGuivarControl.length === 1,
 // Por nombre de columna, no por índice: el control gana columnas cada tanto.
 const vg = virutaGuivarControl[0] || [];
 const col = nombre => vg[encabezado.indexOf(nombre)];
-assert(col('Camiones planilla') === 2 && col('Camiones en SAP') === 1 &&
-  col('Camiones pendientes') === 1 && col('Cargas sólo SAP') === 1,
-  'la fila junta los 2 camiones de la planilla, el que cruza, el pendiente y la carga sólo SAP');
+assert(col('Camiones planilla') === 2 && col('Camiones en SAP') === 2 &&
+  col('Camiones pendientes') === 0 && col('Cargas sólo SAP') === 0,
+  'los 2 camiones de viruta quedan en SAP: uno por su guía y otro por la que le calza');
 assert(col('TS real SAP') === 15.6 && col('Plan TS') === 60,
   'la viruta se compara contra el plan de viruta (60 TS), no contra el de astilla');
+assert(col('TS proyectada') === 15.6,
+  'y las 15,6 TS se cuentan una sola vez, no 15,6 + 7,8 estimadas encima');
 
 const variante = detalle.find(f => String(f[6]) === '60590') || [];
 assert(variante.length > 0,
   'un producto escrito distinto no se descarta si la tabla lo traduce');
-assert(variante[11] === 7.8,
-  'la variante homologada toma el promedio del material de SAP');
+assert(variante[10] === 'EN SAP CON OTRA GUÍA (no se estima)' && variante[11] === 8.1,
+  'y si SAP tiene su carga con otra guía, toma los 8,1 reales en vez de estimar 7,8');
 
 const sinTraducir = detalle.find(f => String(f[6]) === '60600') || [];
 assert(String(sinTraducir[10]) === 'PENDIENTE SIN PROMEDIO' && sinTraducir[11] === 0,
@@ -382,8 +394,9 @@ const combustible = detalle.find(f => String(f[6]) === '24742') || [];
 assert(combustible.length > 0 && combustible[11] === 0,
   'el combustible entra al control aunque SAP no lo tenga, en cero');
 
-const soloSapViruta = detalle.find(f => String(f[6]) === '60576') || [];
-assert(String(soloSapViruta[10]) === 'SOLO SAP' && String(soloSapViruta[2]) === 'VIRUTA-ASERUTA (TS)',
+const soloSapAserrin = detalle.find(f => String(f[6]) === '31505') || [];
+assert(String(soloSapAserrin[10]) === 'SOLO SAP' &&
+  String(soloSapAserrin[2]) === 'ASERRIN (TS)',
   'el detalle conserva el nombre original de cada fuente para poder rastrearlo');
 
 
@@ -489,12 +502,19 @@ assert(['Fecha','Proveedor planilla','Proveedor SAP','Producto','Nº guía','Pat
   'Acción','Estado'].every((t, i) => encFalt[i] === t),
   'la hoja trae el detalle completo: fecha, proveedor, producto, guía, patente, ticket');
 
-// El camión del 02-10 de GUIVAR: SAP ya llegó al 07 y su guía sigue sin estar.
-const vencido = detalle2.find(f => String(f[6]) === '53999') || [];
+// El camión de CSC del 02-10: SAP llegó al 07 y su guía sigue sin estar, y no
+// hay ninguna carga suelta que le calce. El vencimiento actúa recién acá, con
+// el emparejamiento ya descartado: si SAP tuviera la carga, no habría nada que
+// vencer.
+const vencido = detalle2.find(f => String(f[6]) === '1400') || [];
 assert(vencido[10] === 'NO CONTADA (guía que SAP nunca trajo)' && vencido[11] === 0,
   'una guía que SAP ya pasó de largo deja de contarse');
 assert(String(vencido[12]).indexOf('SAP ya llegó hasta el 2026-10-07') >= 0,
   'y el detalle dice hasta dónde llegó SAP y cuántos días lleva sin aparecer');
+
+const conCarga = detalle2.find(f => String(f[6]) === '53999') || [];
+assert(conCarga[10] === 'EN SAP CON OTRA GUÍA (no se estima)',
+  'el emparejamiento gana al vencimiento: si SAP tiene la carga, el camión no vence');
 
 // El del 10-10 es posterior al corte: sigue siendo desfase y se estima.
 const alDia = detalle2.find(f => String(f[6]) === '53850') || [];
@@ -502,24 +522,29 @@ assert(alDia[10] === 'PENDIENTE (estimado)' && alDia[11] === 13,
   'un camión que SAP todavía no alcanzó se complementa igual con la planilla');
 
 const filaFaltante = faltantes.slice(1).find(f =>
-  String(f[colFalt('Nº guía')]) === '53999') || [];
+  String(f[colFalt('Nº guía')]) === '1400') || [];
 assert(filaFaltante.length > 0, 'la guía vencida queda listada');
-assert(String(filaFaltante[colFalt('Proveedor planilla')]) === 'GUIVAR' &&
+assert(String(filaFaltante[colFalt('Proveedor planilla')]) === 'CSC' &&
   String(filaFaltante[colFalt('Producto')]) === 'ASTILLA VERDE',
   'con su proveedor y producto, para poder ir a buscar el papel');
 assert(filaFaltante[colFalt('Días sin cruzar')] === 5,
   'y cuántos días lleva sin cruzar (02-10 contra el corte del 07-10)');
-assert(String(filaFaltante[colFalt('Guía SAP sin cruzar')]) === '53793',
-  'más la guía que SAP tiene suelta y podría ser este mismo camión');
-assert(filaFaltante[colFalt('TS estimadas')] === 13,
+assert(filaFaltante[colFalt('TS estimadas')] > 0,
   'y cuántas TS está aportando esa guía');
 
+const filaConCarga = faltantes.slice(1).find(f =>
+  String(f[colFalt('Nº guía')]) === '53999') || [];
+assert(String(filaConCarga[colFalt('Guía SAP sin cruzar')]) === '53793',
+  'la hoja nombra la guía de SAP que resolvió el camión, para poder corregirla');
+assert(String(filaConCarga[colFalt('Estado')]).indexOf('ya está en SAP') >= 0,
+  'y dice que no se estimó porque ya estaba en SAP con otra guía');
+
 const encControl2 = control2[5];
-const filaGuivar2 = control2.slice(6).find(f =>
-  String(f[0]) === 'ASTILLA VERDE' && String(f[1]) === 'COMERCIAL GUIVAR LTDA.') || [];
-assert(filaGuivar2[encControl2.indexOf('Camiones no contados')] === 1,
+const filaCsc = control2.slice(6).find(f =>
+  String(f[0]) === 'ASTILLA VERDE' && String(f[1]) === 'CSC LTDA.') || [];
+assert(filaCsc[encControl2.indexOf('Camiones no contados')] === 1,
   'el control cuenta aparte los camiones que quedaron fuera');
-assert(String(filaGuivar2[encControl2.indexOf('Alertas')]).indexOf('SAP nunca trajo') >= 0,
+assert(String(filaCsc[encControl2.indexOf('Alertas')]).indexOf('SAP nunca trajo') >= 0,
   'y lo avisa con las TS que quedaron fuera del cálculo');
 
 // La decisión a mano manda sobre la regla.
@@ -528,8 +553,8 @@ hojaFalt.datos[faltantes.indexOf(filaFaltante)][colFalt('Acción')] = 'contar';
 actualizarControl('oct-2026');
 
 const rescatado = libro.getSheetByName('Detalle Camiones').datos
-  .find(f => String(f[6]) === '53999') || [];
-assert(rescatado[10] === 'PENDIENTE (estimado)' && rescatado[11] === 13,
+  .find(f => String(f[6]) === '1400') || [];
+assert(String(rescatado[10]).indexOf('PENDIENTE') === 0 && rescatado[11] > 0,
   'escribir CONTAR en la hoja rescata el camión, aunque la regla lo dé por vencido');
 assert(String(rescatado[12]).indexOf('por decisión en') >= 0,
   'y el detalle deja constancia de que fue una decisión a mano');

@@ -37,7 +37,7 @@
          verde    = ingreso real, cruzado con SAP por su guía
          madera   = estimado: camión en la planilla que SAP aún no procesa
          pizarra  = plan (referencia, no material)
-         ladrillo = riesgo: bajo plan, sin homologar, guías por revisar
+         ladrillo = riesgo: bajo plan, sin homologar, guías por corregir
 
        Nada decorativo usa esos cuatro.
 
@@ -1579,11 +1579,11 @@
       if ((f.revisarGuia || []).length) {
         var sc = f.revisarGuia.reduce(function (t, x) { return t + x.camiones; }, 0);
 
-        ojo.push('<b>' + entero(sc) + ' camión(es) estimado(s)</b> tienen, del ' +
-          'mismo proveedor y material, cargas de SAP que nadie cruzó: ' +
-          'probablemente sea el mismo camión con el Nº de guía escrito distinto. ' +
-          'Se cuentan igual —el mes no se recorta por una sospecha— pero conviene ' +
-          'revisar esas guías para no contarlo dos veces.');
+        ojo.push('<b>' + entero(sc) + ' camión(es)</b> están en SAP con <b>otra ' +
+          'guía</b>: la del papel y la de SAP no coinciden. Se cuentan una sola ' +
+          'vez, con la cantidad real de SAP —estimarlos además sería el mismo ' +
+          'camión dos veces— pero hay que corregir el Nº de guía en la planilla ' +
+          'para que cruce solo.');
       }
 
       if ((f.sinPlan || []).length) {
@@ -2232,7 +2232,7 @@
             ? 'val-riesgo' : 'val-verde',
           pie: (m.sinCruce + m.sinHomologar + m.sinPromedio)
             ? [m.sinHomologar ? entero(m.sinHomologar) + ' sin homologar' : '',
-               m.sinCruce ? entero(m.sinCruce) + ' a revisar' : '',
+               m.sinCruce ? entero(m.sinCruce) + ' con otra guía' : '',
                m.sinPromedio ? entero(m.sinPromedio) + ' sin histórico del producto' : ''
               ].filter(function (x) { return x; }).join(' · ')
             : 'Todos los camiones cruzan o se estiman'
@@ -2296,8 +2296,8 @@
 
       if (m.sinCruce) {
         lista.push({ nivel: 'ojo',
-          texto: 'Camiones estimados con cargas de SAP sin cruzar del mismo ' +
-            'proveedor y material: revisar el Nº de guía.',
+          texto: 'Camiones que están en SAP con otra guía: se cuentan una sola ' +
+            'vez, pero hay que corregir el Nº de guía.',
           valor: entero(m.sinCruce) + ' camiones' });
       }
 
@@ -3335,11 +3335,10 @@
       var ojo = [];
 
       if ((f.revisarGuia || []).length) {
-        ojo.push('Hay camiones cuyo proveedor SÍ cruza pero cuya guía no, y del ' +
-          'mismo proveedor y material quedaron cargas de SAP sin cruzar: ' +
-          esc(f.revisarGuia.map(function (x) {
+        ojo.push('Hay camiones cuyo proveedor SÍ cruza pero cuya guía no, y que ' +
+          'SAP tiene con otra guía: ' + esc(f.revisarGuia.map(function (x) {
             return x.proveedor + ' (' + x.camiones + ')';
-          }).join(', ')) + '. Eso no se arregla homologando: hay que revisar el ' +
+          }).join(', ')) + '. Eso no se arregla homologando: hay que corregir el ' +
           'Nº de guía en la planilla o en el export de SAP.');
       }
 
